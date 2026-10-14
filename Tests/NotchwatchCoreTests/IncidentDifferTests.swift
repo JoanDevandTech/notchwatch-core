@@ -17,8 +17,8 @@ final class IncidentDifferTests: XCTestCase {
 
         XCTAssertTrue(store.initialized)
         XCTAssertEqual(store.seen, ["b", "c"])
-        XCTAssertEqual(result.newIncidents.map(\.gid), ["a"])
-        XCTAssertEqual(result.pending.map(\.gid), ["a"])
+        XCTAssertEqual(result.newIncidents.map(\.id), ["a"])
+        XCTAssertEqual(result.pending.map(\.id), ["a"])
     }
 
     func testFirstRunHonoursCustomFreshWindow() {
@@ -27,7 +27,7 @@ final class IncidentDifferTests: XCTestCase {
 
         let result = IncidentDiffer.diff(current: [incident], store: &store, now: now, freshWindow: 3600)
 
-        XCTAssertEqual(result.newIncidents.map(\.gid), ["a"])
+        XCTAssertEqual(result.newIncidents.map(\.id), ["a"])
         XCTAssertTrue(store.seen.isEmpty)
         XCTAssertTrue(store.initialized)
     }
@@ -41,7 +41,7 @@ final class IncidentDifferTests: XCTestCase {
         let old = sampleIncident("a", createdAt: now.addingTimeInterval(-86_400))
         let result = IncidentDiffer.diff(current: [old], store: &store, now: now)
 
-        XCTAssertEqual(result.newIncidents.map(\.gid), ["a"])
+        XCTAssertEqual(result.newIncidents.map(\.id), ["a"])
         XCTAssertTrue(store.seen.isEmpty)
     }
 
@@ -56,8 +56,8 @@ final class IncidentDifferTests: XCTestCase {
 
         let result = IncidentDiffer.diff(current: [seen, unseen], store: &store, now: now)
 
-        XCTAssertEqual(result.newIncidents.map(\.gid), ["b"])
-        XCTAssertEqual(result.pending.map(\.gid), ["b"])
+        XCTAssertEqual(result.newIncidents.map(\.id), ["b"])
+        XCTAssertEqual(result.pending.map(\.id), ["b"])
         XCTAssertEqual(store.seen, ["a"])
     }
 
@@ -72,7 +72,7 @@ final class IncidentDifferTests: XCTestCase {
         let result = IncidentDiffer.diff(current: [incident], store: &store, now: now)
 
         XCTAssertTrue(result.newIncidents.isEmpty)
-        XCTAssertEqual(result.pending.map(\.gid), ["a"])
+        XCTAssertEqual(result.pending.map(\.id), ["a"])
         XCTAssertEqual(store.snoozedUntil["a"], now.addingTimeInterval(60))
     }
 
@@ -84,8 +84,8 @@ final class IncidentDifferTests: XCTestCase {
 
         let result = IncidentDiffer.diff(current: [incident], store: &store, now: now)
 
-        XCTAssertEqual(result.newIncidents.map(\.gid), ["a"])
-        XCTAssertEqual(result.pending.map(\.gid), ["a"])
+        XCTAssertEqual(result.newIncidents.map(\.id), ["a"])
+        XCTAssertEqual(result.pending.map(\.id), ["a"])
         XCTAssertNil(store.snoozedUntil["a"])
     }
 
@@ -97,7 +97,7 @@ final class IncidentDifferTests: XCTestCase {
 
         let result = IncidentDiffer.diff(current: [incident], store: &store, now: now)
 
-        XCTAssertEqual(result.newIncidents.map(\.gid), ["a"])
+        XCTAssertEqual(result.newIncidents.map(\.id), ["a"])
         XCTAssertNil(store.snoozedUntil["a"])
     }
 
@@ -115,20 +115,20 @@ final class IncidentDifferTests: XCTestCase {
 
         XCTAssertEqual(store.seen, ["a"])
         XCTAssertEqual(Set(store.snoozedUntil.keys), ["b"])
-        XCTAssertEqual(result.pending.map(\.gid), ["b"])
+        XCTAssertEqual(result.pending.map(\.id), ["b"])
         XCTAssertTrue(result.newIncidents.isEmpty)
     }
 
-    func testDuplicatedGidAcrossProjectsCountsOnce() {
+    func testDuplicatedIDAcrossCollectionsCountsOnce() {
         var store = SeenStore()
         store.initialized = true
-        let first = sampleIncident("a", createdAt: now, projectKey: "ventas")
-        let duplicate = sampleIncident("a", createdAt: now, projectKey: "general")
+        let first = sampleIncident("a", createdAt: now, collectionKey: "ventas")
+        let duplicate = sampleIncident("a", createdAt: now, collectionKey: "general")
 
         let result = IncidentDiffer.diff(current: [first, duplicate], store: &store, now: now)
 
         XCTAssertEqual(result.pending.count, 1)
-        XCTAssertEqual(result.pending.first?.projectKey, "ventas")
+        XCTAssertEqual(result.pending.first?.collectionID, tbcCollectionID("ventas"))
         XCTAssertEqual(result.newIncidents.count, 1)
     }
 
@@ -151,17 +151,17 @@ final class IncidentDifferTests: XCTestCase {
         let result = IncidentDiffer.diff(current: incidents, store: &store, now: now)
 
         XCTAssertEqual(
-            result.newIncidents.map(\.gid),
+            result.newIncidents.map(\.id),
             ["urgente", "alta-nueva", "alta-vieja", "media", "baja", "ninguna"]
         )
         // pending incluye la pospuesta, en el mismo orden.
         XCTAssertEqual(
-            result.pending.map(\.gid),
+            result.pending.map(\.id),
             ["urgente", "alta-nueva", "alta-vieja", "media-pospuesta", "media", "baja", "ninguna"]
         )
     }
 
-    func testOrderTieBreaksByGid() {
+    func testOrderTieBreaksByID() {
         var store = SeenStore()
         store.initialized = true
         let incidents = [
@@ -172,12 +172,12 @@ final class IncidentDifferTests: XCTestCase {
 
         let result = IncidentDiffer.diff(current: incidents, store: &store, now: now)
 
-        XCTAssertEqual(result.newIncidents.map(\.gid), ["a", "b", "c"])
+        XCTAssertEqual(result.newIncidents.map(\.id), ["a", "b", "c"])
     }
 
     // MARK: - Prioridad
 
-    func testPriorityComparableAndLabels() {
+    func testPriorityComparableAndLoudness() {
         XCTAssertTrue(IncidentPriority.urgente > .alta)
         XCTAssertTrue(IncidentPriority.alta > .media)
         XCTAssertTrue(IncidentPriority.media > .baja)
@@ -186,7 +186,7 @@ final class IncidentDifferTests: XCTestCase {
             IncidentPriority.allCases.sorted(by: >),
             [.urgente, .alta, .media, .baja, .ninguna]
         )
-        XCTAssertEqual(IncidentPriority.allCases.map(\.label), ["Baja", "Media", "Alta", "Urgente", "Sin prioridad"])
+        XCTAssertEqual(IncidentPriority.descending, [.urgente, .alta, .media, .baja, .ninguna])
         XCTAssertEqual(IncidentPriority.allCases.filter(\.isLoud), [.alta, .urgente])
     }
 }

@@ -15,13 +15,19 @@ final class AsanaClientTests: XCTestCase {
 
     /// Incidencia sobre la que se lanzan las acciones.
     private let sample = Incident(
-        gid: "1211000000000001",
-        projectKey: "ventas",
-        projectName: "Ventas Incidencias",
+        id: "1211000000000001",
+        collectionID: tbcCollectionID("ventas"),
+        collectionName: "Ventas",
         name: "No carga el listado de presupuestos",
         priority: .media,
         createdAt: Date(timeIntervalSince1970: 1_790_000_000)
     )
+
+    /// Incidencias abiertas del proyecto del preajuste indicado.
+    private func openIncidents(_ client: AsanaClient, project key: String) async throws -> [Incident] {
+        let project = try presetProject(key)
+        return try await client.openIncidents(in: project, collection: project.collection)
+    }
 
     /// Transporte que sirve las dos páginas de Ventas según el offset.
     private func ventasTransport() throws -> MockTransport {
@@ -60,7 +66,7 @@ final class AsanaClientTests: XCTestCase {
 
         let me = try await client.me()
 
-        XCTAssertEqual(me.gid, "1200000000000001")
+        XCTAssertEqual(me.userID, "1200000000000001")
         XCTAssertEqual(me.name, "Joan Torres")
         XCTAssertEqual(transport.requests.count, 1)
         let request = try XCTUnwrap(transport.requests.first)
@@ -74,19 +80,17 @@ final class AsanaClientTests: XCTestCase {
     func testOpenIncidentsParsesFieldsWithGlobalPriority() async throws {
         let transport = try ventasTransport()
         let client = AsanaClient(token: "tok", transport: transport)
-        let ventas = try defaultProject("ventas")
-
-        let incidents = try await client.openIncidents(in: ventas)
+        let incidents = try await openIncidents(client, project: "ventas")
 
         // 4 abiertas: la completada se descarta.
-        XCTAssertEqual(incidents.map(\.gid), [
+        XCTAssertEqual(incidents.map(\.id), [
             "1211000000000001", "1211000000000002", "1211000000000003", "1211000000000004",
         ])
 
         // Campo global "Incidencia" -> urgente; campos de texto/enum y resumen de consola.
         let first = incidents[0]
-        XCTAssertEqual(first.projectKey, "ventas")
-        XCTAssertEqual(first.projectName, "Ventas Incidencias")
+        XCTAssertEqual(first.collectionID, "asana-tubuencamino/ventas")
+        XCTAssertEqual(first.collectionName, "Ventas")
         XCTAssertEqual(first.name, "No carga el listado de presupuestos")
         XCTAssertEqual(first.priority, .urgente)
         XCTAssertEqual(first.reporter, "María López")
@@ -112,8 +116,8 @@ final class AsanaClientTests: XCTestCase {
         XCTAssertNil(second.consoleErrors)
         XCTAssertEqual(second.dueOn, "2026-10-20")
         XCTAssertEqual(second.assigneeName, "Joan Torres")
-        XCTAssertEqual(second.assigneeGid, "1200000000000001")
-        XCTAssertNil(incidents[0].assigneeGid)
+        XCTAssertEqual(second.assigneeID, "1200000000000001")
+        XCTAssertNil(incidents[0].assigneeID)
         XCTAssertEqual(second.createdAt, isoDate("2026-10-13T17:02:11Z"))
 
         // Segunda página: "Baja" y prioridad vacía.
@@ -132,29 +136,46 @@ final class AsanaClientTests: XCTestCase {
         let body = try fixture("tasks_general")
         let transport = MockTransport { _ in MockResponse(body: body) }
         let client = AsanaClient(token: "tok", transport: transport)
-        let general = try defaultProject("general")
+        let incidents = try await openIncidents(client, project: "general")
 
-        let incidents = try await client.openIncidents(in: general)
-
-        XCTAssertEqual(incidents.map(\.gid), ["1212000000000001", "1212000000000002"])
+        XCTAssertEqual(incidents.map(\.id), ["1212000000000001", "1212000000000002"])
         // Trae el campo global en "Baja", pero TBC Incidencias usa su campo local ("Alta").
         XCTAssertEqual(incidents[0].priority, .alta)
         XCTAssertEqual(incidents[0].consoleErrors, 2)
         XCTAssertEqual(incidents[1].priority, .urgente)
-        XCTAssertEqual(incidents[1].projectKey, "general")
-        XCTAssertEqual(incidents[1].projectName, "TBC Incidencias")
+        XCTAssertEqual(incidents[1].collectionID, "asana-tubuencamino/general")
+        XCTAssertEqual(incidents[1].collectionName, "TBC")
         XCTAssertNil(incidents[1].consoleErrors)
         XCTAssertEqual(transport.requests.count, 1)
         let request = try XCTUnwrap(transport.requests.first)
         XCTAssertEqual(queryValue(request, "section"), generalDetectadas)
     }
 
+    func testOpenIncidentsWithoutOptionalFieldsIgnoresCustomFields() async throws {
+        let transport = try ventasTransport()
+        let client = AsanaClient(token: "tok", transport: transport)
+        let collection = WatchedCollection(id: "src/ventas", name: "Ventas")
+        let bare = AsanaProjectConfig(
+            collection: collection,
+            projectGid: "1216898612014391",
+            projectName: "Ventas Incidencias",
+            detectedSectionGid: "1219500158564901"
+        )
+
+        let incidents = try await client.openIncidents(in: bare, collection: collection)
+
+        XCTAssertEqual(incidents.count, 4)
+        XCTAssertEqual(incidents[0].collectionID, "src/ventas")
+        XCTAssertTrue(incidents.allSatisfy { $0.priority == .ninguna })
+        XCTAssertTrue(incidents.allSatisfy { $0.reporter == nil && $0.module == nil })
+        // El resumen de consola no depende de la configuración.
+        XCTAssertEqual(incidents[0].consoleErrors, 3)
+    }
+
     func testOpenIncidentsPaginatesWithOffset() async throws {
         let transport = try ventasTransport()
         let client = AsanaClient(token: "tok", transport: transport)
-        let ventas = try defaultProject("ventas")
-
-        _ = try await client.openIncidents(in: ventas)
+        _ = try await openIncidents(client, project: "ventas")
 
         let requests = transport.requests
         XCTAssertEqual(requests.count, 2)
@@ -175,12 +196,10 @@ final class AsanaClientTests: XCTestCase {
         let page1 = try fixture("tasks_ventas_page1")
         let transport = MockTransport { _ in MockResponse(body: page1) }
         let client = AsanaClient(token: "tok", transport: transport)
-        let ventas = try defaultProject("ventas")
-
-        let incidents = try await client.openIncidents(in: ventas)
+        let incidents = try await openIncidents(client, project: "ventas")
 
         XCTAssertEqual(transport.requests.count, 2)
-        XCTAssertEqual(incidents.map(\.gid), ["1211000000000001", "1211000000000002"])
+        XCTAssertEqual(incidents.map(\.id), ["1211000000000001", "1211000000000002"])
     }
 
     func testOpenIncidentsStopsAtMaxPages() async throws {
@@ -190,9 +209,7 @@ final class AsanaClientTests: XCTestCase {
             return MockResponse(body: Data(#"{"data":[],"next_page":{"offset":"\#(current + 1)"}}"#.utf8))
         }
         let client = AsanaClient(token: "tok", transport: transport)
-        let ventas = try defaultProject("ventas")
-
-        let incidents = try await client.openIncidents(in: ventas)
+        let incidents = try await openIncidents(client, project: "ventas")
 
         XCTAssertTrue(incidents.isEmpty)
         XCTAssertEqual(transport.requests.count, AsanaClient.maxPages)
@@ -206,9 +223,7 @@ final class AsanaClientTests: XCTestCase {
             return MockResponse(body: Data(#"{"data":[],"next_page":null}"#.utf8))
         }
         let client = AsanaClient(token: "tok", transport: transport)
-        let ventas = try defaultProject("ventas")
-
-        _ = try await client.openIncidents(in: ventas)
+        _ = try await openIncidents(client, project: "ventas")
 
         XCTAssertEqual(transport.requests.count, 2)
         let second = try XCTUnwrap(transport.requests.last)
@@ -229,7 +244,7 @@ final class AsanaClientTests: XCTestCase {
         do {
             _ = try await client.me()
             XCTFail("Debería lanzar .unauthorized")
-        } catch let error as AsanaError {
+        } catch let error as SourceError {
             XCTAssertEqual(error, .unauthorized)
         }
     }
@@ -239,12 +254,11 @@ final class AsanaClientTests: XCTestCase {
             MockResponse(status: 429, body: Data("{}".utf8), headers: ["Retry-After": "17"])
         }
         let client = AsanaClient(token: "tok", transport: transport)
-        let ventas = try defaultProject("ventas")
 
         do {
-            _ = try await client.openIncidents(in: ventas)
+            _ = try await openIncidents(client, project: "ventas")
             XCTFail("Debería lanzar .rateLimited")
-        } catch let error as AsanaError {
+        } catch let error as SourceError {
             XCTAssertEqual(error, .rateLimited(retryAfter: 17))
         }
     }
@@ -256,7 +270,7 @@ final class AsanaClientTests: XCTestCase {
         do {
             _ = try await client.me()
             XCTFail("Debería lanzar .rateLimited")
-        } catch let error as AsanaError {
+        } catch let error as SourceError {
             XCTAssertEqual(error, .rateLimited(retryAfter: nil))
         }
     }
@@ -270,7 +284,7 @@ final class AsanaClientTests: XCTestCase {
         do {
             _ = try await client.me()
             XCTFail("Debería lanzar .http")
-        } catch let error as AsanaError {
+        } catch let error as SourceError {
             XCTAssertEqual(error, .http(500, "Server Error"))
         }
     }
@@ -278,27 +292,26 @@ final class AsanaClientTests: XCTestCase {
     func testInvalidJSONThrowsDecoding() async throws {
         let transport = MockTransport { _ in MockResponse(body: Data("no es json".utf8)) }
         let client = AsanaClient(token: "tok", transport: transport)
-        let ventas = try defaultProject("ventas")
 
         do {
-            _ = try await client.openIncidents(in: ventas)
+            _ = try await openIncidents(client, project: "ventas")
             XCTFail("Debería lanzar .decoding")
-        } catch let error as AsanaError {
+        } catch let error as SourceError {
             guard case .decoding = error else {
                 return XCTFail("Error inesperado: \(error)")
             }
         }
     }
 
-    func testTransportFailureMapsToHTTPZero() async throws {
+    func testTransportFailureMapsToNetwork() async throws {
         let transport = MockTransport { _ in throw TestSupportError.invalidResponse }
         let client = AsanaClient(token: "tok", transport: transport)
 
         do {
             _ = try await client.me()
-            XCTFail("Debería lanzar .http(0, …)")
-        } catch let error as AsanaError {
-            guard case .http(0, _) = error else {
+            XCTFail("Debería lanzar .network")
+        } catch let error as SourceError {
+            guard case .network = error else {
                 return XCTFail("Error inesperado: \(error)")
             }
         }
@@ -309,9 +322,9 @@ final class AsanaClientTests: XCTestCase {
         let client = AsanaClient(token: "tok", transport: transport)
 
         do {
-            try await client.assignToMe(sample, config: .tubuencamino)
+            try await client.assignToMe(sample, statusField: AsanaPresets.tbcStatus)
             XCTFail("Debería lanzar .unauthorized")
-        } catch let error as AsanaError {
+        } catch let error as SourceError {
             XCTAssertEqual(error, .unauthorized)
         }
     }
@@ -322,7 +335,7 @@ final class AsanaClientTests: XCTestCase {
         let transport = MockTransport { _ in MockResponse() }
         let client = AsanaClient(token: "tok", transport: transport)
 
-        try await client.assignToMe(sample, config: .tubuencamino)
+        try await client.assignToMe(sample, statusField: AsanaPresets.tbcStatus)
 
         XCTAssertEqual(transport.requests.count, 1)
         try assertAction(
@@ -333,15 +346,24 @@ final class AsanaClientTests: XCTestCase {
         )
     }
 
-    func testMoveToVerification() async throws {
+    func testAssignToMeWithoutStatusFieldOnlyAssigns() async throws {
         let transport = MockTransport { _ in MockResponse() }
         let client = AsanaClient(token: "tok", transport: transport)
 
-        let ventas = try defaultProject("ventas")
-        let general = try defaultProject("general")
+        try await client.assignToMe(sample, statusField: nil)
 
-        try await client.moveToVerification(sample, project: ventas)
-        try await client.moveToVerification(sample, project: general)
+        try assertAction(transport.requests.first, method: "PUT", url: taskURL, body: #"{"data":{"assignee":"me"}}"#)
+    }
+
+    func testMoveToSection() async throws {
+        let transport = MockTransport { _ in MockResponse() }
+        let client = AsanaClient(token: "tok", transport: transport)
+
+        let ventas = try XCTUnwrap(try presetProject("ventas").resolvedSectionGid)
+        let general = try XCTUnwrap(try presetProject("general").resolvedSectionGid)
+
+        try await client.move(sample, toSection: ventas)
+        try await client.move(sample, toSection: general)
 
         let requests = transport.requests
         XCTAssertEqual(requests.count, 2)
@@ -392,9 +414,9 @@ final class AsanaClientTests: XCTestCase {
         let transport = MockTransport { _ in MockResponse() }
         let client = AsanaClient(token: "tok", transport: transport)
 
-        let ventas = try defaultProject("ventas")
+        let field = try XCTUnwrap(try presetProject("ventas").priorityField)
 
-        try await client.setPriority(sample, priority: .alta, project: ventas)
+        try await client.setPriority(sample, priority: .alta, field: field)
 
         XCTAssertEqual(transport.requests.count, 1)
         try assertAction(
@@ -409,9 +431,9 @@ final class AsanaClientTests: XCTestCase {
         let transport = MockTransport { _ in MockResponse() }
         let client = AsanaClient(token: "tok", transport: transport)
 
-        let general = try defaultProject("general")
+        let field = try XCTUnwrap(try presetProject("general").priorityField)
 
-        try await client.setPriority(sample, priority: .urgente, project: general)
+        try await client.setPriority(sample, priority: .urgente, field: field)
 
         XCTAssertEqual(transport.requests.count, 1)
         try assertAction(
@@ -426,9 +448,9 @@ final class AsanaClientTests: XCTestCase {
         let transport = MockTransport { _ in MockResponse() }
         let client = AsanaClient(token: "tok", transport: transport)
 
-        let ventas = try defaultProject("ventas")
+        let field = try XCTUnwrap(try presetProject("ventas").priorityField)
 
-        try await client.setPriority(sample, priority: .ninguna, project: ventas)
+        try await client.setPriority(sample, priority: .ninguna, field: field)
 
         XCTAssertEqual(transport.requests.count, 1)
         try assertAction(
