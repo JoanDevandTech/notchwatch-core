@@ -30,6 +30,22 @@ extension IncidentPriority {
     static let menuOrder: [IncidentPriority] = [.urgente, .alta, .media, .baja, .ninguna]
 }
 
+extension Incident {
+    /// Nombre corto de la app para los chips ("Ventas" en vez de "Ventas Incidencias").
+    var appLabel: String {
+        switch projectKey {
+        case "ventas": return "Ventas"
+        case "finanzas": return "Finanzas"
+        case "operaciones": return "Operaciones"
+        case "traslados": return "Traslados"
+        case "mailing": return "Mailing"
+        case "mitbc": return "Mi TBC"
+        case "general": return "TBC"
+        default: return projectName
+        }
+    }
+}
+
 // MARK: - Piezas pequeñas
 
 /// Píldora con el nombre de la prioridad.

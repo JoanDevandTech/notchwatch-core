@@ -165,7 +165,7 @@ private struct PeekContent: View {
                 VStack(alignment: .leading, spacing: 5) {
                     HStack(spacing: 6) {
                         PriorityBadge(priority: incident.priority)
-                        ProjectChip(name: incident.projectName)
+                        ProjectChip(name: incident.appLabel)
                         if extra > 0 {
                             Text("+\(extra) más")
                                 .font(.system(size: 10.5, weight: .semibold, design: .rounded))
@@ -274,7 +274,8 @@ private struct ExpandedContent: View {
         } else if isSnapshot {
             VStack(spacing: IslandLayout.rowSpacing) {
                 ForEach(items.prefix(IslandLayout.maxVisibleRows)) { incident in
-                    IncidentRow(incident: incident)
+                    // En las capturas, la primera fila se pinta "con el ratón encima" para enseñar las acciones.
+                    IncidentRow(incident: incident, previewHover: incident.gid == items.first?.gid)
                 }
             }
             .padding(.horizontal, 10)

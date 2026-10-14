@@ -6,9 +6,11 @@ struct IncidentRow: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.isSnapshotRender) private var isSnapshotRender
     let incident: Incident
+    var previewHover = false
     @State private var hovering = false
 
     private var snoozed: Bool { model.isSnoozed(incident) }
+    private var showsActions: Bool { hovering || previewHover }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -30,10 +32,7 @@ struct IncidentRow: View {
                     }
                 }
                 HStack(spacing: 6) {
-                    ProjectChip(name: incident.projectName)
-                    Text(Formatters.relative(incident.createdAt))
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
-                        .foregroundColor(.white.opacity(0.45))
+                    ProjectChip(name: incident.appLabel)
                     IncidentMetaLine(incident: incident)
                 }
             }
@@ -46,11 +45,11 @@ struct IncidentRow: View {
         .frame(height: IslandLayout.rowHeight)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.white.opacity(hovering ? 0.11 : 0.055))
+                .fill(Color.white.opacity(showsActions ? 0.11 : 0.055))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(incident.priority.tint.opacity(hovering ? 0.45 : 0), lineWidth: 1)
+                .strokeBorder(incident.priority.tint.opacity(showsActions ? 0.45 : 0), lineWidth: 1)
         )
         .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .onHover { hovering = $0 }
@@ -83,8 +82,15 @@ struct IncidentRow: View {
             .frame(maxWidth: 170, alignment: .trailing)
             .help(message)
         case nil:
-            actions
-                .opacity(hovering ? 1 : 0.5)
+            if showsActions {
+                actions
+                    .transition(.opacity.combined(with: .move(edge: .trailing)))
+            } else {
+                Text(Formatters.relative(incident.createdAt))
+                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                    .foregroundColor(.white.opacity(0.45))
+                    .transition(.opacity)
+            }
         }
     }
 
