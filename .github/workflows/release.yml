@@ -1,0 +1,51 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag a publicar (por ejemplo v0.1.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: DMG universal y GitHub Release
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Tests del núcleo
+        run: swift test
+
+      - name: Empaquetar app universal
+        env:
+          UNIVERSAL: "1"
+        run: VERSION="${TAG#v}" scripts/bundle.sh
+
+      - name: Self-test del binario universal
+        timeout-minutes: 3
+        run: build/Notchwatch.app/Contents/MacOS/Notchwatch --self-test
+
+      - name: Crear DMG
+        run: VERSION="${TAG#v}" scripts/make-dmg.sh
+
+      - name: Publicar la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PRERELEASE=""
+          case "$TAG" in *-*) PRERELEASE="--prerelease" ;; esac
+          gh release create "$TAG" build/*.dmg build/*.sha256 \
+            --title "Notchwatch $TAG" \
+            --generate-notes \
+            $PRERELEASE

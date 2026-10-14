@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Compilar, testear y empaquetar
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Versiones
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Caché de SwiftPM
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: spm-${{ runner.os }}-${{ hashFiles('Package.swift') }}-${{ hashFiles('Sources/**/*.swift', 'Tests/**/*.swift') }}
+          restore-keys: |
+            spm-${{ runner.os }}-${{ hashFiles('Package.swift') }}-
+
+      - name: Compilar
+        run: swift build
+
+      - name: Tests del núcleo
+        run: swift test --parallel
+
+      - name: Empaquetar Notchwatch.app
+        run: scripts/bundle.sh
+
+      - name: Self-test de la app
+        timeout-minutes: 3
+        run: build/Notchwatch.app/Contents/MacOS/Notchwatch --self-test
+
+      - name: Capturas de la isla
+        timeout-minutes: 3
+        run: build/Notchwatch.app/Contents/MacOS/Notchwatch --snapshot build/snapshots
+
+      - name: Comprimir la app
+        run: ditto -c -k --keepParent build/Notchwatch.app build/Notchwatch.zip
+
+      - name: Subir la app
+        uses: actions/upload-artifact@v4
+        with:
+          name: notchwatch-app
+          path: build/Notchwatch.zip
+          retention-days: 14
+
+      - name: Subir capturas
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshots
+          path: build/snapshots
+          retention-days: 14
