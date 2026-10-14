@@ -14,6 +14,10 @@ Notchwatch es una isla flotante, al estilo de la Dynamic Island del iPhone, que 
 |---|---|
 | ![Reposo](docs/screenshots/2-reposo-con-pendientes.png) | ![Aviso alta](docs/screenshots/4-aviso-alta.png) |
 
+| Filtro «Mías» (solo las asignadas a ti) | «Mías» sin ninguna asignada |
+|---|---|
+| ![Mías](docs/screenshots/9-desplegada-mias.png) | ![Mías vacía](docs/screenshots/10-mias-sin-asignadas.png) |
+
 > Las capturas las genera la propia app en la CI (`--snapshot`) en cada push; las últimas están en la rama `ci-snapshots`.
 
 ## Qué hace
