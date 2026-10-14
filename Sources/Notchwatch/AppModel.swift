@@ -40,7 +40,16 @@ struct ScreenOption: Identifiable, Hashable {
 final class AppModel: ObservableObject {
     // MARK: - Estado publicado
 
-    @Published private(set) var pending: [Incident] = []
+    @Published private(set) var pending: [Incident] = [] {
+        didSet {
+            // Lo que deja de estar pendiente (visto, en Verificación, resuelto) sale del Centro de notificaciones.
+            let gone = Set(oldValue.map(\.gid)).subtracting(pending.map(\.gid))
+            if !gone.isEmpty { notifier?.withdraw(Array(gone)) }
+            if pending.isEmpty && !oldValue.isEmpty {
+                notifier?.withdraw([NotificationPlanner.summaryIdentifier])
+            }
+        }
+    }
     @Published private(set) var peek: Incident?
     @Published private(set) var peekExtra = 0
     @Published private(set) var mode: IslandMode = .idle
@@ -105,6 +114,8 @@ final class AppModel: ObservableObject {
     private var githubToken: String?
     private var hotKey: GlobalHotKey?
     private var isLoadingUser = false
+    /// Clics en notificaciones recibidos antes de la primera lectura de Asana.
+    private var deferredResponses: [SystemNotifier.Response] = []
     private let log = Logger(subsystem: "com.joandev.notchwatch", category: "model")
 
     init(demo: Bool, snapshot: Bool = false) {
@@ -160,6 +171,9 @@ final class AppModel: ObservableObject {
         let now = Date()
         return pending.filter { isMine($0) && !isSnoozed($0, now: now) }.count
     }
+
+    /// ¿Sabemos ya quién es el usuario del token? Sin eso el filtro «Mías» no puede decidir.
+    var isUserKnown: Bool { userGid != nil || userName != nil }
 
     /// Pendientes que cuentan para el contador (las pospuestas no).
     var visibleCount: Int {
@@ -284,7 +298,8 @@ final class AppModel: ObservableObject {
             let me = try? await client.me()
             guard let self else { return }
             self.isLoadingUser = false
-            guard let me else { return }
+            // Si el token cambió mientras tanto, el resultado ya no vale.
+            guard self.client === client, let me else { return }
             self.userName = me.name
             self.userGid = me.gid
         }
@@ -328,13 +343,10 @@ final class AppModel: ObservableObject {
     private func apply(_ outcome: PollOutcome) {
         lastPoll = outcome.date
         let openIDs = Set(outcome.pending.map(\.gid))
-        let previousIDs = Set(pending.map(\.gid))
         // Las incidencias simuladas desde Ajustes viven solo en local.
         let localOnly = pending.filter { simulated.contains($0.gid) && !openIDs.contains($0.gid) }
         pending = outcome.pending + localOnly
         let keep = Set(pending.map(\.gid))
-        // Las que ya no están pendientes (vistas, resueltas, movidas) salen del Centro de notificaciones.
-        notifier?.withdraw(Array(previousIDs.subtracting(keep)))
         if userGid == nil && outcome.errors.isEmpty {
             loadUser()
         }
@@ -349,11 +361,21 @@ final class AppModel: ObservableObject {
 
         let wasFirstPoll = isFirstPoll
         isFirstPoll = false
+        if wasFirstPoll && outcome.errors.isEmpty {
+            // Notificaciones de sesiones anteriores que ya no corresponden a nada pendiente.
+            notifier?.prune(keeping: keep.union([NotificationPlanner.summaryIdentifier]))
+        }
         if !outcome.newIncidents.isEmpty {
             announce(outcome.newIncidents, asBatch: wasFirstPoll && outcome.newIncidents.count > 1)
         }
         if unacknowledgedLoud.isEmpty && mode == .idle {
             glowPriority = nil
+        }
+        if wasFirstPoll && !deferredResponses.isEmpty {
+            // Clics en notificaciones que llegaron antes de esta primera lectura.
+            let responses = deferredResponses
+            deferredResponses.removeAll()
+            responses.forEach { handleNotificationResponse($0) }
         }
     }
 
@@ -500,6 +522,7 @@ final class AppModel: ObservableObject {
         if unacknowledgedLoud.isEmpty {
             repeatTask?.cancel()
             repeatTask = nil
+            if mode == .idle { glowPriority = nil }
         }
     }
 
@@ -554,6 +577,8 @@ final class AppModel: ObservableObject {
 
     func expand() {
         acknowledgeAll()
+        // El resumen del Centro de notificaciones ya no hace falta: estás viendo la lista.
+        notifier?.withdraw([NotificationPlanner.summaryIdentifier])
         peekTask?.cancel()
         peekQueue.removeAll()
         batchExtra = 0
@@ -703,7 +728,6 @@ final class AppModel: ObservableObject {
 
     func markSeen(_ incident: Incident) {
         acknowledge(incident.gid)
-        notifier?.withdraw([incident.gid])
         withAnimation(.islandSnappy) {
             pending.removeAll { $0.gid == incident.gid }
         }
@@ -744,7 +768,6 @@ final class AppModel: ObservableObject {
                 guard let self else { return }
                 self.activity[gid] = .done(doneMessage)
                 if removeAfterSuccess {
-                    self.notifier?.withdraw([gid])
                     withAnimation(.islandSnappy) {
                         self.pending.removeAll { $0.gid == gid }
                     }
@@ -878,7 +901,6 @@ final class AppModel: ObservableObject {
         hasToken = false
         userName = nil
         userGid = nil
-        notifier?.withdraw(pending.map(\.gid))
         connectionIssue = nil
         acknowledgeAll()
         peekQueue.removeAll()
@@ -951,6 +973,8 @@ final class AppModel: ObservableObject {
         }
         if settings.systemNotifications && !old.systemNotifications {
             requestNotificationPermission()
+        } else if !settings.systemNotifications && old.systemNotifications {
+            notifier?.withdrawAll()
         }
         if settings.hotKey != old.hotKey {
             applyHotKey()
@@ -1005,23 +1029,52 @@ final class AppModel: ObservableObject {
         let incident = response.incidentGid.flatMap { gid in
             pending.first { $0.gid == gid }
         }
+        if incident == nil && response.incidentGid != nil && isFirstPoll && client != nil {
+            // Recién arrancada (p. ej. al pulsar una notificación antigua): se atiende tras la primera lectura.
+            deferredResponses.append(response)
+            return
+        }
         switch response.action {
         case SystemNotifier.Action.assign:
-            guard let incident else { return }
+            guard let incident else {
+                reportNoLongerPending()
+                return
+            }
             assignToMe(incident)
             showFromCommand()
         case SystemNotifier.Action.snooze:
-            guard let incident else { return }
+            guard let incident else {
+                reportNoLongerPending()
+                return
+            }
             snooze(incident, minutes: 60)
+            dismissPeek(of: incident.gid)
         default:
             if let incident {
                 open(incident)
+                dismissPeek(of: incident.gid)
+                // En demo y simulaciones no hay tarea que abrir: se enseña la isla.
+                if isDemo || simulated.contains(incident.gid) { showFromCommand() }
             } else if let url = response.url {
                 NSWorkspace.shared.open(url)
             } else {
                 showFromCommand()
             }
         }
+    }
+
+    /// Quita de la isla (y de la cola) el aviso de una incidencia atendida desde fuera de ella.
+    private func dismissPeek(of gid: String) {
+        peekQueue.removeAll { $0.gid == gid }
+        if peek?.gid == gid {
+            peekTask?.cancel()
+            endPeek()
+        }
+    }
+
+    private func reportNoLongerPending() {
+        showInfo("Esa incidencia ya no está pendiente")
+        showFromCommand()
     }
 
     // MARK: - Simulación y demo

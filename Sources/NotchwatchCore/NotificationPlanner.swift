@@ -48,7 +48,8 @@ public enum NotificationPlanner {
 
     /// Notificaciones de una tanda, de la más a la menos importante (prioridad desc y fecha desc).
     /// Sin incidencias, []. Una sola va siempre individual, aunque `asBatch`. Con `asBatch` o más de
-    /// `maxIndividual`, solo el resumen; si no, una por incidencia.
+    /// `maxIndividual`, solo el resumen; si no, una por incidencia. `asBatch` es la tanda de la primera
+    /// lectura de la sesión: incidencias que ya estaban pendientes, así que su resumen dice «pendientes».
     public static func payloads(for incidents: [Incident], asBatch: Bool) -> [NotificationPayload] {
         let ranked = IncidentDiffer.ordered(incidents)
         guard let top = ranked.first else { return [] }
@@ -56,7 +57,7 @@ public enum NotificationPlanner {
             return [payload(for: top)]
         }
         if asBatch || ranked.count > maxIndividual {
-            return [summaryPayload(top: top, count: ranked.count)]
+            return [summaryPayload(top: top, count: ranked.count, pendingAtStartup: asBatch)]
         }
         return ranked.map { payload(for: $0) }
     }
@@ -76,10 +77,11 @@ public enum NotificationPlanner {
         )
     }
 
-    /// Resumen de la tanda ("3 incidencias nuevas") que destaca la más importante; nil si no hay incidencias.
-    public static func summary(for incidents: [Incident]) -> NotificationPayload? {
+    /// Resumen de la tanda ("3 incidencias nuevas", o "3 incidencias pendientes" al arrancar) que destaca
+    /// la más importante; nil si no hay incidencias.
+    public static func summary(for incidents: [Incident], pendingAtStartup: Bool = false) -> NotificationPayload? {
         guard let top = IncidentDiffer.ordered(incidents).first else { return nil }
-        return summaryPayload(top: top, count: incidents.count)
+        return summaryPayload(top: top, count: incidents.count, pendingAtStartup: pendingAtStartup)
     }
 
     /// "Reportada por Ana · Presupuestos · 2 errores de consola", solo con las partes que tienen valor.
@@ -97,10 +99,16 @@ public enum NotificationPlanner {
         return parts.joined(separator: " · ")
     }
 
-    private static func summaryPayload(top: Incident, count: Int) -> NotificationPayload {
-        NotificationPayload(
+    private static func summaryPayload(top: Incident, count: Int, pendingAtStartup: Bool) -> NotificationPayload {
+        let noun: String
+        if pendingAtStartup {
+            noun = count == 1 ? "incidencia pendiente" : "incidencias pendientes"
+        } else {
+            noun = count == 1 ? "incidencia nueva" : "incidencias nuevas"
+        }
+        return NotificationPayload(
             identifier: summaryIdentifier,
-            title: count == 1 ? "1 incidencia nueva" : "\(count) incidencias nuevas",
+            title: "\(count) \(noun)",
             subtitle: "La más importante: \(top.priority.label) · \(top.appLabel)",
             body: count > 1 ? "\(top.name) y \(count - 1) más" : top.name,
             threadIdentifier: summaryIdentifier,

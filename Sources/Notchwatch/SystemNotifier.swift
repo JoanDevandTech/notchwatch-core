@@ -90,7 +90,8 @@ final class SystemNotifier: NSObject, UNUserNotificationCenterDelegate, @uncheck
     }
 
     func post(_ payloads: [NotificationPayload]) {
-        for payload in payloads {
+        // macOS apila arriba la última entregada: se envían de menos a más importante.
+        for payload in payloads.reversed() {
             let request = UNNotificationRequest(
                 identifier: payload.identifier,
                 content: makeContent(for: payload),
@@ -125,6 +126,19 @@ final class SystemNotifier: NSObject, UNUserNotificationCenterDelegate, @uncheck
     func withdraw(_ gids: [String]) {
         guard !gids.isEmpty else { return }
         center.removeDeliveredNotifications(withIdentifiers: gids)
+    }
+
+    func withdrawAll() {
+        center.removeAllDeliveredNotifications()
+    }
+
+    /// Quita las entregadas que no estén en `identifiers` (p. ej. de una sesión anterior).
+    func prune(keeping identifiers: Set<String>) {
+        center.getDeliveredNotifications { [weak self] delivered in
+            let stale = delivered.map(\.request.identifier).filter { !identifiers.contains($0) }
+            guard !stale.isEmpty else { return }
+            self?.center.removeDeliveredNotifications(withIdentifiers: stale)
+        }
     }
 
     // MARK: UNUserNotificationCenterDelegate

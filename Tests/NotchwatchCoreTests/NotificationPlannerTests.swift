@@ -97,9 +97,10 @@ final class NotificationPlannerTests: XCTestCase {
 
         let payloads = NotificationPlanner.payloads(for: incidents, asBatch: true)
 
-        let summary = try XCTUnwrap(NotificationPlanner.summary(for: incidents))
+        let summary = try XCTUnwrap(NotificationPlanner.summary(for: incidents, pendingAtStartup: true))
         XCTAssertEqual(payloads, [summary])
-        XCTAssertEqual(summary.title, "2 incidencias nuevas")
+        // La tanda del arranque son las que ya estaban pendientes, no nuevas.
+        XCTAssertEqual(summary.title, "2 incidencias pendientes")
         XCTAssertEqual(summary.subtitle, "La más importante: Alta · Finanzas")
         XCTAssertEqual(summary.body, "Incidencia b y 1 más")
     }
@@ -204,8 +205,10 @@ final class NotificationPlannerTests: XCTestCase {
                 isSummary: true
             )
         )
-        // Con asBatch, la misma tanda se resume igual.
-        XCTAssertEqual(NotificationPlanner.payloads(for: incidents, asBatch: true), [summary])
+        // Con asBatch (arranque) se resume igual, pero como pendientes.
+        var startup = summary
+        startup.title = "3 incidencias pendientes"
+        XCTAssertEqual(NotificationPlanner.payloads(for: incidents, asBatch: true), [startup])
     }
 
     func testSummaryOfOne() throws {
@@ -222,5 +225,13 @@ final class NotificationPlannerTests: XCTestCase {
         XCTAssertNil(summary.incidentGid)
         XCTAssertNil(summary.url)
         XCTAssertTrue(summary.isSummary)
+    }
+
+    func testStartupSummaryOfOneSaysPending() throws {
+        let incident = sampleIncident("a", priority: .alta, createdAt: now)
+
+        let summary = try XCTUnwrap(NotificationPlanner.summary(for: [incident], pendingAtStartup: true))
+
+        XCTAssertEqual(summary.title, "1 incidencia pendiente")
     }
 }

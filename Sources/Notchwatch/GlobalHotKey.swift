@@ -32,6 +32,8 @@ private func handleHotKeyEvent(
 
 /// Atajo de teclado global con `RegisterEventHotKey` (Carbon): funciona con cualquier app
 /// delante y no necesita permisos de Accesibilidad ni de monitorización de teclado.
+/// Se instala en el dispatcher de eventos (no en el destino de la app) para que también
+/// funcione con un menú de Notchwatch abierto.
 @MainActor
 final class GlobalHotKey {
     private static weak var active: GlobalHotKey?
@@ -56,7 +58,7 @@ final class GlobalHotKey {
             eventKind: UInt32(kEventHotKeyPressed)
         )
         let installed = InstallEventHandler(
-            GetApplicationEventTarget(),
+            GetEventDispatcherTarget(),
             handleHotKeyEvent,
             1,
             &eventType,
@@ -73,7 +75,7 @@ final class GlobalHotKey {
             combo.keyCode,
             combo.modifiers,
             hotKeyID,
-            GetApplicationEventTarget(),
+            GetEventDispatcherTarget(),
             0,
             &hotKeyRef
         )
@@ -103,7 +105,13 @@ final class GlobalHotKey {
         }
     }
 
+    /// Evita que una pulsación mantenida (o doble) abra y cierre la isla de golpe.
+    private static var lastFire: TimeInterval = 0
+
     fileprivate static func fire() {
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - lastFire > 0.3 else { return }
+        lastFire = now
         active?.action()
     }
 }
@@ -132,7 +140,7 @@ extension HotKeyChoice {
     /// Cómo se pinta en el menú de la barra (informativo: el atajo real es el global).
     var menuKeyEquivalent: (key: String, modifiers: NSEvent.ModifierFlags) {
         switch self {
-        case .off: return ("i", [.command])
+        case .off: return ("", [])
         case .controlOptionCommandI: return ("i", [.control, .option, .command])
         case .controlOptionCommandN: return ("n", [.control, .option, .command])
         case .optionCommandI: return ("i", [.option, .command])

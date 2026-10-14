@@ -272,7 +272,7 @@ private struct ExpandedContent: View {
         let items = model.listedIncidents
         if items.isEmpty {
             if model.settings.showOnlyMine && !model.pending.isEmpty {
-                EmptyMineView(total: model.pending.count) { model.setShowOnlyMine(false) }
+                EmptyMineView(total: model.pending.count, loading: !model.isUserKnown) { model.setShowOnlyMine(false) }
                     .frame(height: 96)
             } else {
                 EmptyStateView(hasToken: model.hasToken || model.isDemo) { model.openSettings() }
@@ -379,6 +379,8 @@ private struct FilterSwitch: View {
 /// Filtro «Mías» sin resultados: ninguna pendiente está asignada a ti.
 private struct EmptyMineView: View {
     let total: Int
+    /// Aún no se sabe quién es el usuario del token (arrancando o sin conexión).
+    let loading: Bool
     let showAll: () -> Void
 
     var body: some View {
@@ -386,7 +388,7 @@ private struct EmptyMineView: View {
             Image(systemName: "person.crop.circle.badge.checkmark")
                 .font(.system(size: 22, weight: .semibold))
                 .foregroundColor(Color.mineTint)
-            Text("No tienes incidencias asignadas")
+            Text(loading ? "Cargando tu usuario de Asana…" : "No tienes incidencias asignadas")
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundColor(.white)
             Button(total == 1 ? "Ver la pendiente" : "Ver las \(total) pendientes", action: showAll)

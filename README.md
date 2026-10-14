@@ -41,7 +41,8 @@ Notchwatch es una isla flotante, al estilo de la Dynamic Island del iPhone, que 
 - **Notificación de macOS.** Cada incidencia nueva llega también al Centro de notificaciones, sin sonido porque ya suena la isla:
   - al pulsarla se abre en Asana;
   - en sus opciones puedes **Asignármela** o **Posponer 1 h**;
-  - si entran varias a la vez llega un único resumen;
+  - si entran más de tres a la vez llega un único resumen, y al abrir la app otro con las que siguen pendientes;
+  - se retiran solas cuando la incidencia deja de estar pendiente;
   - se desactiva en *Ajustes → Avisos y sonido*.
 - **Atajo global ⌃⌥⌘I** para desplegar o recoger la isla desde cualquier app, sin permisos de Accesibilidad. En *Ajustes → General* puedes cambiarlo a ⌃⌥⌘N o ⌥⌘I, o desactivarlo. ⌥⌘I no es el de por defecto porque también abre las herramientas de desarrollo de Chrome y Safari.
 - **Sonido propio sintetizado.** Una campanita suave para prioridad baja y media, y tres notas más insistentes para alta y urgente. Se pueden silenciar y hay un modo «No molestar» con horario, en el que solo suenan las urgentes.
@@ -69,7 +70,7 @@ Notchwatch es una isla flotante, al estilo de la Dynamic Island del iPhone, que 
 
 - Lee cada 20 s (configurable) la sección **Incidencias Detectadas** de cada proyecto activo.
 - La primera vez que lee un proyecto, da por vistas las incidencias con más de 10 minutos y solo avisa de las recientes. Así no te inunda de avisos.
-- Cada incidencia se avisa una vez por sesión. Si la pospones, vuelve a avisar cuando vence el plazo.
+- Cada incidencia se avisa una vez por sesión: al abrir la app, las que siguen pendientes se recuerdan juntas («3 incidencias pendientes»). Si la pospones, vuelve a avisar cuando vence el plazo.
 - «Marcar como vista» la quita de la lista sin tocar nada en Asana. El estado se guarda en `~/Library/Application Support/Notchwatch/state.json`.
 
 ## Probar sin Asana

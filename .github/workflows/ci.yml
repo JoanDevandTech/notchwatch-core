@@ -47,7 +47,9 @@ jobs:
         run: swift test --parallel
 
       - name: Empaquetar Notchwatch.app
-        run: scripts/bundle.sh
+        run: |
+          set -o pipefail
+          scripts/bundle.sh 2>&1 | tee build/bundle.log
 
       - name: Self-test de la app
         timeout-minutes: 3
@@ -87,7 +89,7 @@ jobs:
           WORK="$(mktemp -d)"
           cp build/snapshots/*.png "$WORK/"
           # Avisos del compilador, para revisarlos sin descargar los logs de la CI.
-          grep -E "(warning|error):" build/compile.log | sort -u > "$WORK/compile-warnings.txt" || true
+          cat build/compile.log build/bundle.log 2>/dev/null | grep -E "(warning|error):" | sort -u > "$WORK/compile-warnings.txt" || true
           cd "$WORK"
           printf '# Capturas de Notchwatch\n\nGeneradas por la CI desde `%s` (%s).\n' "$SOURCE_REF" "$SOURCE_SHA" > README.md
           git init -q -b ci-snapshots

@@ -1,6 +1,7 @@
 import AppKit
 import NotchwatchCore
 import SwiftUI
+import UserNotifications
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -103,10 +104,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // Notificaciones: crea el centro de macOS y monta el contenido, sin enviar nada.
         if SystemNotifier.isSupported {
-            let payloads = NotificationPlanner.payloads(for: DemoData.initialIncidents(), asBatch: false)
+            let samples = DemoData.initialIncidents()
+            let individual = NotificationPlanner.payloads(for: Array(samples.prefix(2)), asBatch: false)
+            let summary = NotificationPlanner.payloads(for: samples, asBatch: true)
             guard let notifier = SystemNotifier.make(),
-                  !payloads.isEmpty,
-                  payloads.allSatisfy({ !notifier.makeContent(for: $0).title.isEmpty })
+                  individual.count == 2,
+                  summary.count == 1,
+                  individual.allSatisfy({ payload in
+                      let content = notifier.makeContent(for: payload)
+                      return content.categoryIdentifier == SystemNotifier.categoryIdentifier
+                          && (content.userInfo["gid"] as? String) == payload.incidentGid
+                  }),
+                  summary.allSatisfy({ !notifier.makeContent(for: $0).title.isEmpty })
             else {
                 FileHandle.standardError.write(Data("SELF-TEST: fallo al preparar las notificaciones\n".utf8))
                 exit(4)

@@ -65,8 +65,9 @@ final class StatusItemController: NSObject {
         button.title = count > 0 ? " \(count)" : ""
         button.toolTip = count == 1 ? "1 incidencia pendiente" : "\(count) incidencias pendientes"
         pauseItem.title = model.isPaused ? "Reanudar avisos" : "Pausar avisos 1 h"
-        // El atajo global elegido, para que se vea en el menú.
-        let shortcut = model.settings.hotKey.menuKeyEquivalent
+        // El atajo global elegido, para que se vea en el menú (nada si está desactivado o falló).
+        var shortcut = model.settings.hotKey.menuKeyEquivalent
+        if model.hotKeyError != nil { shortcut = ("", []) }
         showItem.keyEquivalent = shortcut.key
         showItem.keyEquivalentModifierMask = shortcut.modifiers
     }
