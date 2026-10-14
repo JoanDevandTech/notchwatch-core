@@ -2,11 +2,19 @@
 
 Notchwatch es una isla flotante, al estilo de la Dynamic Island del iPhone, que vive en el notch del Mac y avisa con animación y sonido cuando entra una incidencia nueva en Asana. Vigila los proyectos de incidencias de Tubuencamino: Ventas, Finanzas, Operaciones, Traslados, Mailing, Mi TBC y TBC Incidencias.
 
-| Reposo | Aviso urgente | Desplegada |
-|---|---|---|
-| ![Reposo](docs/screenshots/2-reposo-con-pendientes.png) | ![Aviso urgente](docs/screenshots/3-aviso-urgente.png) | ![Desplegada](docs/screenshots/7-desplegada.png) |
+**Aviso de una incidencia urgente** (halo rojo animado, se queda hasta que la atiendas):
 
-> La CI regenera las capturas en cada push (artefacto `snapshots`).
+![Aviso urgente](docs/screenshots/3-aviso-urgente.png)
+
+**Desplegada** al pasar el ratón, con las acciones de la fila bajo el cursor:
+
+![Desplegada](docs/screenshots/7-desplegada.png)
+
+| Reposo (píldora en el notch) | Aviso de prioridad alta |
+|---|---|
+| ![Reposo](docs/screenshots/2-reposo-con-pendientes.png) | ![Aviso alta](docs/screenshots/4-aviso-alta.png) |
+
+> Las capturas las genera la propia app en la CI (`--snapshot`) en cada push; las últimas están en la rama `ci-snapshots`.
 
 ## Qué hace
 
