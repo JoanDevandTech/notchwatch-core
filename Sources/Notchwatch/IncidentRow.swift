@@ -12,6 +12,22 @@ struct IncidentRow: View {
     private var snoozed: Bool { model.isSnoozed(incident) }
     private var showsActions: Bool { hovering || previewHover }
 
+    /// Icono de quién la tiene asignada: azul si eres tú.
+    @ViewBuilder
+    private var assigneeBadge: some View {
+        if model.isMine(incident) {
+            Image(systemName: "person.crop.circle.badge.checkmark")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(Color.mineTint)
+                .help("Asignada a ti")
+        } else if let assignee = incident.assigneeName, !assignee.isEmpty {
+            Image(systemName: "person.crop.circle")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(.white.opacity(0.45))
+                .help("Asignada a \(assignee)")
+        }
+    }
+
     var body: some View {
         HStack(spacing: 10) {
             Capsule(style: .continuous)
@@ -24,6 +40,7 @@ struct IncidentRow: View {
                         .font(.system(size: 12.5, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
                         .lineLimit(1)
+                    assigneeBadge
                     if snoozed {
                         Image(systemName: "moon.zzz.fill")
                             .font(.system(size: 9, weight: .bold))

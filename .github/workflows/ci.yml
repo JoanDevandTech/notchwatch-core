@@ -38,7 +38,10 @@ jobs:
             spm-${{ runner.os }}-${{ steps.versions.outputs.swift }}-${{ hashFiles('Package.swift') }}-
 
       - name: Compilar
-        run: swift build
+        run: |
+          set -o pipefail
+          mkdir -p build
+          swift build 2>&1 | tee build/compile.log
 
       - name: Tests del núcleo
         run: swift test --parallel
@@ -83,6 +86,8 @@ jobs:
           set -euo pipefail
           WORK="$(mktemp -d)"
           cp build/snapshots/*.png "$WORK/"
+          # Avisos del compilador, para revisarlos sin descargar los logs de la CI.
+          grep -E "(warning|error):" build/compile.log | sort -u > "$WORK/compile-warnings.txt" || true
           cd "$WORK"
           printf '# Capturas de Notchwatch\n\nGeneradas por la CI desde `%s` (%s).\n' "$SOURCE_REF" "$SOURCE_SHA" > README.md
           git init -q -b ci-snapshots

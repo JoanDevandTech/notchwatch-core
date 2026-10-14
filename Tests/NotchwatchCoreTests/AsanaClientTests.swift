@@ -10,7 +10,7 @@ final class AsanaClientTests: XCTestCase {
     private let generalDetectadas = "1214164017398877"
     private let page2Offset = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.cGFnZTI"
     private let expectedOptFields =
-        "name,created_at,due_on,notes,permalink_url,completed,assignee.name,custom_fields.gid,custom_fields.display_value,custom_fields.enum_value.gid"
+        "name,created_at,due_on,notes,permalink_url,completed,assignee.gid,assignee.name,custom_fields.gid,custom_fields.display_value,custom_fields.enum_value.gid"
     private let taskURL = "https://app.asana.com/api/1.0/tasks/1211000000000001"
 
     /// Incidencia sobre la que se lanzan las acciones.
@@ -112,6 +112,8 @@ final class AsanaClientTests: XCTestCase {
         XCTAssertNil(second.consoleErrors)
         XCTAssertEqual(second.dueOn, "2026-10-20")
         XCTAssertEqual(second.assigneeName, "Joan Torres")
+        XCTAssertEqual(second.assigneeGid, "1200000000000001")
+        XCTAssertNil(incidents[0].assigneeGid)
         XCTAssertEqual(second.createdAt, isoDate("2026-10-13T17:02:11Z"))
 
         // Segunda página: "Baja" y prioridad vacía.

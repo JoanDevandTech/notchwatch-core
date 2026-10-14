@@ -7,6 +7,7 @@ final class StatusItemController: NSObject {
     private let statusItem: NSStatusItem
     private let model: AppModel
     private let pauseItem: NSMenuItem
+    private let showItem: NSMenuItem
     private var cancellable: AnyCancellable?
     var onShowIsland: (() -> Void)?
     var onOpenSettings: (() -> Void)?
@@ -15,8 +16,10 @@ final class StatusItemController: NSObject {
         self.model = model
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         pauseItem = NSMenuItem(title: "Pausar avisos 1 h", action: #selector(StatusItemController.togglePause), keyEquivalent: "")
+        showItem = NSMenuItem(title: "Mostrar incidencias", action: #selector(StatusItemController.showIsland), keyEquivalent: "i")
         super.init()
         pauseItem.target = self
+        showItem.target = self
         statusItem.menu = makeMenu()
         cancellable = model.objectWillChange.sink { [weak self] _ in
             Task { @MainActor in self?.refresh() }
@@ -26,7 +29,7 @@ final class StatusItemController: NSObject {
 
     private func makeMenu() -> NSMenu {
         let menu = NSMenu()
-        menu.addItem(menuItem("Mostrar incidencias", #selector(showIsland), key: "i"))
+        menu.addItem(showItem)
         menu.addItem(menuItem("Actualizar ahora", #selector(refreshNow), key: "r"))
         menu.addItem(.separator())
         menu.addItem(pauseItem)
@@ -62,6 +65,10 @@ final class StatusItemController: NSObject {
         button.title = count > 0 ? " \(count)" : ""
         button.toolTip = count == 1 ? "1 incidencia pendiente" : "\(count) incidencias pendientes"
         pauseItem.title = model.isPaused ? "Reanudar avisos" : "Pausar avisos 1 h"
+        // El atajo global elegido, para que se vea en el menú.
+        let shortcut = model.settings.hotKey.menuKeyEquivalent
+        showItem.keyEquivalent = shortcut.key
+        showItem.keyEquivalentModifierMask = shortcut.modifiers
     }
 
     @objc private func showIsland() {

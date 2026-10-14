@@ -3,6 +3,9 @@ import NotchwatchCore
 
 /// Incidencias de ejemplo para el modo demo, las simulaciones de Ajustes y las capturas de CI.
 enum DemoData {
+    /// GID del usuario de las capturas (el mismo que el de los fixtures de los tests).
+    static let snapshotUserGid = "1200000000000001"
+
     struct Template {
         let project: String
         let title: String

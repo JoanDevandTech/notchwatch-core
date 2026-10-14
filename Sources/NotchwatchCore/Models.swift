@@ -147,6 +147,8 @@ public struct Incident: Codable, Hashable, Identifiable, Sendable {
     public var dueOn: String?
     public var assigneeName: String?
     public var permalinkURL: URL?
+    /// GID del usuario asignado (para el filtro «Mías»).
+    public var assigneeGid: String?
 
     public init(
         gid: String,
@@ -160,7 +162,8 @@ public struct Incident: Codable, Hashable, Identifiable, Sendable {
         createdAt: Date,
         dueOn: String? = nil,
         assigneeName: String? = nil,
-        permalinkURL: URL? = nil
+        permalinkURL: URL? = nil,
+        assigneeGid: String? = nil
     ) {
         self.gid = gid
         self.projectKey = projectKey
@@ -174,6 +177,7 @@ public struct Incident: Codable, Hashable, Identifiable, Sendable {
         self.dueOn = dueOn
         self.assigneeName = assigneeName
         self.permalinkURL = permalinkURL
+        self.assigneeGid = assigneeGid
     }
 }
 

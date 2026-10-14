@@ -241,6 +241,8 @@ private struct ExpandedContent: View {
                 .background(Capsule(style: .continuous).fill(model.accentPriority?.tint ?? Color.white.opacity(0.85)))
                 .contentTransition(.numericText())
                 .matchedGeometryEffect(id: "count", in: namespace)
+            FilterSwitch()
+                .padding(.leading, 2)
             if model.isPaused {
                 Label("En pausa", systemImage: "bell.slash.fill")
                     .labelStyle(CompactLabelStyle())
@@ -269,8 +271,13 @@ private struct ExpandedContent: View {
     private var list: some View {
         let items = model.listedIncidents
         if items.isEmpty {
-            EmptyStateView(hasToken: model.hasToken || model.isDemo) { model.openSettings() }
-                .frame(height: 96)
+            if model.settings.showOnlyMine && !model.pending.isEmpty {
+                EmptyMineView(total: model.pending.count) { model.setShowOnlyMine(false) }
+                    .frame(height: 96)
+            } else {
+                EmptyStateView(hasToken: model.hasToken || model.isDemo) { model.openSettings() }
+                    .frame(height: 96)
+            }
         } else if isSnapshot {
             VStack(spacing: IslandLayout.rowSpacing) {
                 ForEach(items.prefix(IslandLayout.maxVisibleRows)) { incident in
@@ -312,6 +319,82 @@ private struct ExpandedContent: View {
         .font(.system(size: 10, weight: .medium, design: .rounded))
         .foregroundColor(.white.opacity(0.4))
         .padding(.horizontal, 16)
+    }
+}
+
+/// Selector «Todas / Mías» de la cabecera: la cápsula clara se desliza a la opción elegida.
+private struct FilterSwitch: View {
+    @EnvironmentObject private var model: AppModel
+    @Namespace private var selection
+
+    var body: some View {
+        let onlyMine = model.settings.showOnlyMine
+        HStack(spacing: 2) {
+            segment("Todas", count: nil, selected: !onlyMine, help: "Ver todas las incidencias") {
+                model.setShowOnlyMine(false)
+            }
+            segment("Mías", count: model.mineCount, selected: onlyMine, help: "Ver solo las asignadas a ti") {
+                model.setShowOnlyMine(true)
+            }
+        }
+        .padding(2)
+        .background(Capsule(style: .continuous).fill(Color.white.opacity(0.08)))
+    }
+
+    private func segment(
+        _ title: String,
+        count: Int?,
+        selected: Bool,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Text(title)
+                if let count, count > 0 {
+                    Text("\(count)")
+                        .monospacedDigit()
+                        .foregroundColor(.white.opacity(selected ? 0.75 : 0.45))
+                }
+            }
+            .font(.system(size: 11, weight: .semibold, design: .rounded))
+            .foregroundColor(.white.opacity(selected ? 1 : 0.55))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 3.5)
+            .background {
+                if selected {
+                    Capsule(style: .continuous)
+                        .fill(Color.white.opacity(0.18))
+                        .matchedGeometryEffect(id: "selection", in: selection)
+                }
+            }
+            .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .accessibilityLabel(help)
+    }
+}
+
+/// Filtro «Mías» sin resultados: ninguna pendiente está asignada a ti.
+private struct EmptyMineView: View {
+    let total: Int
+    let showAll: () -> Void
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "person.crop.circle.badge.checkmark")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundColor(Color.mineTint)
+            Text("No tienes incidencias asignadas")
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundColor(.white)
+            Button(total == 1 ? "Ver la pendiente" : "Ver las \(total) pendientes", action: showAll)
+                .buttonStyle(.plain)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundColor(Color.mineTint)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 

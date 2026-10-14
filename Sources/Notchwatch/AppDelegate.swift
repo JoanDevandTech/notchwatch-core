@@ -1,4 +1,5 @@
 import AppKit
+import NotchwatchCore
 import SwiftUI
 
 @MainActor
@@ -100,6 +101,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             FileHandle.standardError.write(Data("SELF-TEST: no se generaron los sonidos\n".utf8))
             exit(2)
         }
+        // Notificaciones: crea el centro de macOS y monta el contenido, sin enviar nada.
+        if SystemNotifier.isSupported {
+            let payloads = NotificationPlanner.payloads(for: DemoData.initialIncidents(), asBatch: false)
+            guard let notifier = SystemNotifier.make(),
+                  !payloads.isEmpty,
+                  payloads.allSatisfy({ !notifier.makeContent(for: $0).title.isEmpty })
+            else {
+                FileHandle.standardError.write(Data("SELF-TEST: fallo al preparar las notificaciones\n".utf8))
+                exit(4)
+            }
+        }
+        // Atajo global: se registra y se suelta (si el sistema no lo deja, solo se avisa).
+        let hotKey = GlobalHotKey {}
+        let hotKeyResult = hotKey.apply(.default).map { "no disponible (\($0))" } ?? "OK"
+        hotKey.unregister()
+        FileHandle.standardOutput.write(Data("SELF-TEST atajo global: \(hotKeyResult)\n".utf8))
         FileHandle.standardOutput.write(Data("SELF-TEST OK\n".utf8))
         exit(0)
     }

@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 import NotchwatchCore
 
@@ -49,7 +50,12 @@ struct SettingsView: View {
             updatesSection
         }
         .formStyle(.grouped)
-        .frame(width: 540, height: 680)
+        .frame(width: 540, height: 720)
+        .onAppear { model.refreshNotificationPermission() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            // Al volver de Ajustes del Sistema, por si cambió el permiso.
+            model.refreshNotificationPermission()
+        }
     }
 
     // MARK: Asana
@@ -133,6 +139,10 @@ struct SettingsView: View {
 
     private var soundSection: some View {
         Section("Avisos y sonido") {
+            Toggle("Notificación de macOS al entrar una incidencia", isOn: $model.settings.systemNotifications)
+            if model.settings.systemNotifications {
+                notificationPermissionRow
+            }
             Picker("Comprobar Asana cada", selection: $model.settings.pollInterval) {
                 ForEach(intervals, id: \.self) { value in
                     Text("\(Int(value)) s").tag(value)
@@ -157,6 +167,34 @@ struct SettingsView: View {
                 Button("Probar sonido suave") { model.sound.play(.soft) }
                 Button("Probar sonido urgente") { model.sound.play(.urgent) }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var notificationPermissionRow: some View {
+        switch model.notificationPermission {
+        case .allowed:
+            EmptyView()
+        case .notDetermined:
+            HStack {
+                Text("macOS todavía no ha dado permiso para notificar.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Button("Pedir permiso") { model.requestNotificationPermission() }
+            }
+        case .denied:
+            HStack {
+                Label("macOS tiene bloqueadas las notificaciones de Notchwatch", systemImage: "bell.slash.fill")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+                Spacer()
+                Button("Abrir Ajustes del Sistema") { model.openNotificationSettings() }
+            }
+        case .unavailable:
+            Text("Solo funcionan con Notchwatch.app (no con «swift run»).")
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
     }
 
@@ -190,6 +228,20 @@ struct SettingsView: View {
                     .foregroundColor(.red)
             }
             Toggle("Desplegar la isla al pasar el ratón", isOn: $model.settings.expandOnHover)
+            Picker("Atajo para mostrar u ocultar la isla", selection: $model.settings.hotKey) {
+                ForEach(HotKeyChoice.allCases) { choice in
+                    Text(choice.title).tag(choice)
+                }
+            }
+            if let hotKeyError = model.hotKeyError {
+                Text(hotKeyError)
+                    .font(.caption)
+                    .foregroundColor(.red)
+            } else if let note = model.settings.hotKey.conflictNote {
+                Text(note)
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
             Picker("Pantalla", selection: screenBinding) {
                 Text("Automática (la del notch)").tag("auto")
                 ForEach(model.availableScreens) { screen in

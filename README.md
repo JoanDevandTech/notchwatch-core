@@ -6,7 +6,7 @@ Notchwatch es una isla flotante, al estilo de la Dynamic Island del iPhone, que 
 
 ![Aviso urgente](docs/screenshots/3-aviso-urgente.png)
 
-**Desplegada** al pasar el ratón, con las acciones de la fila bajo el cursor:
+**Desplegada** al pasar el ratón (o con ⌃⌥⌘I), con las acciones de la fila bajo el cursor y el selector *Todas / Mías*:
 
 ![Desplegada](docs/screenshots/7-desplegada.png)
 
@@ -28,7 +28,7 @@ Notchwatch es una isla flotante, al estilo de la Dynamic Island del iPhone, que 
   - fecha de vencimiento.
 
   La acompaña un halo animado del color de la prioridad. Las de prioridad baja y media se recogen solas a los 6 segundos. Las altas y urgentes se quedan a la vista y repiten el sonido hasta que pasas el ratón por la isla.
-- **Desplegada.** Al pasar el ratón por la isla, o con un clic, aparece la lista de pendientes con sus acciones rápidas:
+- **Desplegada.** Al pasar el ratón por la isla, con un clic o con el atajo ⌃⌥⌘I, aparece la lista de pendientes con sus acciones rápidas:
   - abrir en Asana;
   - asignármela (además, pone el Estado en «En curso»);
   - pasar a Verificación;
@@ -36,6 +36,14 @@ Notchwatch es una isla flotante, al estilo de la Dynamic Island del iPhone, que 
   - cambiar la fecha de vencimiento: atajos o un calendario;
   - cambiar la prioridad;
   - marcar como vista.
+
+  Arriba, el selector **Todas / Mías** deja solo las que tienes asignadas (con un icono azul en la lista). El contador de la píldora y los avisos siguen contando todas, porque las nuevas llegan sin asignar.
+- **Notificación de macOS.** Cada incidencia nueva llega también al Centro de notificaciones, sin sonido porque ya suena la isla:
+  - al pulsarla se abre en Asana;
+  - en sus opciones puedes **Asignármela** o **Posponer 1 h**;
+  - si entran varias a la vez llega un único resumen;
+  - se desactiva en *Ajustes → Avisos y sonido*.
+- **Atajo global ⌃⌥⌘I** para desplegar o recoger la isla desde cualquier app, sin permisos de Accesibilidad. En *Ajustes → General* puedes cambiarlo a ⌃⌥⌘N o ⌥⌘I, o desactivarlo. ⌥⌘I no es el de por defecto porque también abre las herramientas de desarrollo de Chrome y Safari.
 - **Sonido propio sintetizado.** Una campanita suave para prioridad baja y media, y tres notas más insistentes para alta y urgente. Se pueden silenciar y hay un modo «No molestar» con horario, en el que solo suenan las urgentes.
 - **Icono en la barra de menús** con el contador y un menú para mostrar la isla, actualizar, pausar los avisos 1 h, abrir los ajustes y buscar actualizaciones.
 
@@ -52,7 +60,8 @@ Notchwatch es una isla flotante, al estilo de la Dynamic Island del iPhone, que 
 3. Al abrirse por primera vez aparece la ventana de Ajustes: pega tu **token personal de Asana** y pulsa *Guardar y probar*.
    - Para crear el token, ve en Asana a *Mi configuración → Apps → Consola de desarrolladores → Token de acceso personal* (https://app.asana.com/0/my-apps).
    - El token solo se guarda en el **Llavero** de tu Mac.
-4. Opcional: en *Ajustes → General*, activa **Iniciar Notchwatch al arrancar el Mac**.
+4. macOS te pedirá permiso para mostrar notificaciones: pulsa **Permitir**. Si lo deniegas, puedes activarlas después en *Ajustes del Sistema → Notificaciones → Notchwatch*.
+5. Opcional: en *Ajustes → General*, activa **Iniciar Notchwatch al arrancar el Mac**.
 
 > La app va firmada ad-hoc, así que cada versión nueva tiene una firma distinta y macOS te pedirá una vez permiso para leer el token del Llavero. Pulsa **«Permitir siempre»**.
 
@@ -70,7 +79,11 @@ Notchwatch es una isla flotante, al estilo de la Dynamic Island del iPhone, que 
   swift run Notchwatch --demo
   ```
   Genera incidencias falsas cada 12 s.
-- **Desde la app:** en *Ajustes → Probar la isla* puedes simular una incidencia de cada prioridad. Solo existe en local.
+- **Desde la app:** en *Ajustes → Probar la isla* puedes simular una incidencia de cada prioridad. Solo existe en local, pero también llega la notificación de macOS si la tienes activada.
+- Las notificaciones de macOS necesitan la app empaquetada: con `swift run` no salen. Para verlas en modo demo:
+  ```bash
+  scripts/bundle.sh && open build/Notchwatch.app --args --demo
+  ```
 
 ## Desarrollo
 
@@ -114,6 +127,7 @@ Sources/
     IncidentMonitor        Actor: poll en paralelo, línea base por proyecto, persistencia.
     IncidentDiffer         Qué es nuevo, qué está pendiente, snooze.
     SoundPolicy            Silencio, «No molestar» y repetición de urgentes.
+    NotificationPlanner    Texto de las notificaciones de macOS (una por incidencia o un resumen).
     NotchwatchConfig       Proyectos, secciones y campos de Tubuencamino (GIDs).
   Notchwatch/              App macOS (SwiftUI + AppKit).
     NotchWindowController  NSPanel sobre el notch, hover y paso de clics.
@@ -121,7 +135,9 @@ Sources/
     IncidentRow            Fila con acciones rápidas.
     AppModel               Orquesta poll, avisos, sonidos, acciones y demo.
     SoundEngine            Sonidos sintetizados con AVAudioEngine.
-    SettingsView           Token (Llavero), proyectos, sonido, pantalla, login.
+    SystemNotifier         Notificaciones de macOS (UserNotifications) y sus acciones.
+    GlobalHotKey           Atajo global con RegisterEventHotKey (Carbon), sin permisos extra.
+    SettingsView           Token (Llavero), proyectos, avisos, sonido, atajo, pantalla, login.
 Tests/NotchwatchCoreTests  XCTest con fixtures reales de la API de Asana.
 scripts/                   bundle.sh, make-dmg.sh, make-icon.swift
 .github/workflows/         ci.yml (build, tests, self-test, capturas) y release.yml (DMG)

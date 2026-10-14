@@ -10,7 +10,7 @@ public final class AsanaClient: Sendable {
     private let baseURL: URL
 
     /// Campos pedidos al listar tareas.
-    static let optFields = "name,created_at,due_on,notes,permalink_url,completed,assignee.name,custom_fields.gid,custom_fields.display_value,custom_fields.enum_value.gid"
+    static let optFields = "name,created_at,due_on,notes,permalink_url,completed,assignee.gid,assignee.name,custom_fields.gid,custom_fields.display_value,custom_fields.enum_value.gid"
     /// Campo personalizado "Reportado por".
     static let reporterFieldGid = "1216067243827070"
     /// Campo personalizado "Módulo".
@@ -157,7 +157,8 @@ public final class AsanaClient: Sendable {
             createdAt: AsanaClient.parseDate(task.createdAt) ?? Date(timeIntervalSince1970: 0),
             dueOn: AsanaClient.nonEmpty(task.dueOn),
             assigneeName: AsanaClient.nonEmpty(task.assignee?.name),
-            permalinkURL: task.permalinkURL.flatMap { URL(string: $0) }
+            permalinkURL: task.permalinkURL.flatMap { URL(string: $0) },
+            assigneeGid: AsanaClient.nonEmpty(task.assignee?.gid)
         )
     }
 
@@ -322,6 +323,7 @@ struct TaskDTO: Decodable {
 }
 
 struct AssigneeDTO: Decodable {
+    let gid: String?
     let name: String?
 }
 

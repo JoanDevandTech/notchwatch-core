@@ -11,6 +11,7 @@ enum SnapshotRenderer {
         let mode: IslandMode
         let pending: [Incident]
         let peek: Incident?
+        var showOnlyMine = false
     }
 
     static func renderAll(to directory: String) -> Int32 {
@@ -22,7 +23,10 @@ enum SnapshotRenderer {
             return 1
         }
         let now = Date()
-        let samples = DemoData.initialIncidents(now: now)
+        var samples = DemoData.initialIncidents(now: now)
+        // La segunda la tiene asignada el usuario de las capturas (filtro «Mías»).
+        samples[1].assigneeName = "Joan Torres"
+        samples[1].assigneeGid = DemoData.snapshotUserGid
         let scenarios = [
             Scenario(name: "1-reposo-sin-incidencias", mode: .idle, pending: [], peek: nil),
             Scenario(name: "2-reposo-con-pendientes", mode: .idle, pending: samples, peek: nil),
@@ -32,11 +36,18 @@ enum SnapshotRenderer {
             Scenario(name: "6-aviso-baja", mode: .peek, pending: samples, peek: DemoData.sample(.baja, now: now)),
             Scenario(name: "7-desplegada", mode: .expanded, pending: samples, peek: nil),
             Scenario(name: "8-desplegada-vacia", mode: .expanded, pending: [], peek: nil),
+            Scenario(name: "9-desplegada-mias", mode: .expanded, pending: samples, peek: nil, showOnlyMine: true),
+            Scenario(name: "10-mias-sin-asignadas", mode: .expanded, pending: Array(samples.prefix(1)), peek: nil, showOnlyMine: true),
         ]
         var failures: Int32 = 0
         for scenario in scenarios {
             let model = AppModel(demo: true, snapshot: true)
-            model.applySnapshot(mode: scenario.mode, pending: scenario.pending, peek: scenario.peek)
+            model.applySnapshot(
+                mode: scenario.mode,
+                pending: scenario.pending,
+                peek: scenario.peek,
+                showOnlyMine: scenario.showOnlyMine
+            )
             let renderer = ImageRenderer(content: SnapshotCanvas().environmentObject(model))
             renderer.scale = 2
             guard let image = renderer.nsImage,

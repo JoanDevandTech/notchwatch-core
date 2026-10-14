@@ -56,6 +56,11 @@ final class AppModel: ObservableObject {
     @Published private(set) var update: UpdateInfo?
     @Published private(set) var infoMessage: String?
     @Published private(set) var snoozedUntil: [String: Date] = [:]
+    /// GID del usuario del token (para el filtro «Mías»).
+    @Published private(set) var userGid: String?
+    @Published private(set) var notificationPermission: NotificationPermission = .unavailable
+    /// Por qué no se pudo registrar el atajo global (lo enseña Ajustes).
+    @Published private(set) var hotKeyError: String?
     @Published var notch: NotchMetrics = .fallback
     @Published var settings: AppSettings {
         didSet {
@@ -70,6 +75,8 @@ final class AppModel: ObservableObject {
     let isDemo: Bool
     let isSnapshot: Bool
     let sound: SoundEngine
+    /// Centro de notificaciones de macOS (`nil` fuera de Notchwatch.app y en las capturas).
+    let notifier: SystemNotifier?
     var onRequestSettings: (() -> Void)?
     var onPickDueDate: ((Incident) -> Void)?
     var onLayoutChange: (() -> Void)?
@@ -96,6 +103,8 @@ final class AppModel: ObservableObject {
     private var observers: [NSObjectProtocol] = []
     /// Token de GitHub en memoria: se lee una vez del Llavero (cada lectura puede pedir permiso).
     private var githubToken: String?
+    private var hotKey: GlobalHotKey?
+    private var isLoadingUser = false
     private let log = Logger(subsystem: "com.joandev.notchwatch", category: "model")
 
     init(demo: Bool, snapshot: Bool = false) {
@@ -105,10 +114,17 @@ final class AppModel: ObservableObject {
         let loaded = snapshot ? AppSettings() : AppSettings.load()
         settings = loaded
         config = AppModel.makeConfig(from: loaded)
+        notifier = snapshot ? nil : SystemNotifier.make()
         if !snapshot {
             githubToken = KeychainStore.read(.githubToken)
             hasGitHubToken = githubToken != nil
             observeMenuTracking()
+        }
+        if let notifier {
+            notificationPermission = .notDetermined
+            notifier.onResponse = { [weak self] response in
+                self?.handleNotificationResponse(response)
+            }
         }
     }
 
@@ -124,12 +140,25 @@ final class AppModel: ObservableObject {
         return until > now
     }
 
-    /// Lista de la isla desplegada: primero las activas y al final las pospuestas.
+    /// ¿Está asignada al usuario del token? Compara por GID y, si aún no se conoce, por nombre.
+    func isMine(_ incident: Incident) -> Bool {
+        incident.isAssigned(toUserGid: userGid, name: userName)
+    }
+
+    /// Lista de la isla desplegada (con el filtro «Mías» si está activo): primero las activas
+    /// y al final las pospuestas.
     var listedIncidents: [Incident] {
         let now = Date()
-        let active = pending.filter { !isSnoozed($0, now: now) }
-        let snoozed = pending.filter { isSnoozed($0, now: now) }
+        let source = settings.showOnlyMine ? pending.filter { isMine($0) } : pending
+        let active = source.filter { !isSnoozed($0, now: now) }
+        let snoozed = source.filter { isSnoozed($0, now: now) }
         return active + snoozed
+    }
+
+    /// Pendientes asignadas a mí (sin contar las pospuestas).
+    var mineCount: Int {
+        let now = Date()
+        return pending.filter { isMine($0) && !isSnoozed($0, now: now) }.count
     }
 
     /// Pendientes que cuentan para el contador (las pospuestas no).
@@ -188,6 +217,12 @@ final class AppModel: ObservableObject {
     // MARK: - Arranque
 
     func start() {
+        applyHotKey()
+        if settings.systemNotifications {
+            requestNotificationPermission()
+        } else {
+            refreshNotificationPermission()
+        }
         if isDemo {
             hasToken = true
             userName = "Modo demo"
@@ -238,9 +273,20 @@ final class AppModel: ObservableObject {
             monitor = IncidentMonitor(client: client, config: config, storeURL: AppModel.storeURL())
             startPolling()
         }
+        loadUser()
+    }
+
+    /// Nombre y GID del usuario del token (el GID hace falta para el filtro «Mías»).
+    private func loadUser() {
+        guard let client, !isLoadingUser else { return }
+        isLoadingUser = true
         Task { [weak self] in
-            guard let me = try? await client.me() else { return }
-            self?.userName = me.name
+            let me = try? await client.me()
+            guard let self else { return }
+            self.isLoadingUser = false
+            guard let me else { return }
+            self.userName = me.name
+            self.userGid = me.gid
         }
     }
 
@@ -282,10 +328,16 @@ final class AppModel: ObservableObject {
     private func apply(_ outcome: PollOutcome) {
         lastPoll = outcome.date
         let openIDs = Set(outcome.pending.map(\.gid))
+        let previousIDs = Set(pending.map(\.gid))
         // Las incidencias simuladas desde Ajustes viven solo en local.
         let localOnly = pending.filter { simulated.contains($0.gid) && !openIDs.contains($0.gid) }
         pending = outcome.pending + localOnly
         let keep = Set(pending.map(\.gid))
+        // Las que ya no están pendientes (vistas, resueltas, movidas) salen del Centro de notificaciones.
+        notifier?.withdraw(Array(previousIDs.subtracting(keep)))
+        if userGid == nil && outcome.errors.isEmpty {
+            loadUser()
+        }
         snoozedUntil = snoozedUntil.filter { keep.contains($0.key) }
         unacknowledgedLoud = unacknowledgedLoud.filter { keep.contains($0) }
         peekQueue.removeAll { !keep.contains($0.gid) }
@@ -351,6 +403,11 @@ final class AppModel: ObservableObject {
             unacknowledgedLoud.insert(incident.gid)
         }
         guard !isPaused else { return }
+
+        // Notificación de macOS (salvo si ya estás mirando la isla desplegada).
+        if settings.systemNotifications && !(mode == .expanded && isHovering) {
+            notifier?.post(NotificationPlanner.payloads(for: sorted, asBatch: asBatch))
+        }
 
         if asBatch {
             peekQueue = [top]
@@ -537,6 +594,16 @@ final class AppModel: ObservableObject {
         if mode != .expanded { showFromCommand() }
     }
 
+    /// Atajo global: despliega la isla o, si ya está desplegada, la recoge.
+    func toggleIsland() {
+        if mode == .expanded {
+            hoverTask?.cancel()
+            collapse()
+        } else {
+            showFromCommand()
+        }
+    }
+
     private func observeMenuTracking() {
         let center = NotificationCenter.default
         observers.append(center.addObserver(
@@ -572,7 +639,11 @@ final class AppModel: ObservableObject {
 
     func assignToMe(_ incident: Incident) {
         let name = userName
-        applyLocal(incident.gid) { $0.assigneeName = name }
+        let gid = userGid
+        applyLocal(incident.gid) {
+            $0.assigneeName = name
+            $0.assigneeGid = gid
+        }
         perform(on: incident, doneMessage: "Asignada a ti") { client, config, _ in
             try await client.assignToMe(incident, config: config)
         }
@@ -632,6 +703,7 @@ final class AppModel: ObservableObject {
 
     func markSeen(_ incident: Incident) {
         acknowledge(incident.gid)
+        notifier?.withdraw([incident.gid])
         withAnimation(.islandSnappy) {
             pending.removeAll { $0.gid == incident.gid }
         }
@@ -672,6 +744,7 @@ final class AppModel: ObservableObject {
                 guard let self else { return }
                 self.activity[gid] = .done(doneMessage)
                 if removeAfterSuccess {
+                    self.notifier?.withdraw([gid])
                     withAnimation(.islandSnappy) {
                         self.pending.removeAll { $0.gid == gid }
                     }
@@ -790,6 +863,7 @@ final class AppModel: ObservableObject {
             didPromptForSettings = false
             configureClient(token: token)
             userName = me.name
+            userGid = me.gid
             return .success(me.name)
         } catch {
             return .failure(AppModel.describe(error))
@@ -803,6 +877,8 @@ final class AppModel: ObservableObject {
         client = nil
         hasToken = false
         userName = nil
+        userGid = nil
+        notifier?.withdraw(pending.map(\.gid))
         connectionIssue = nil
         acknowledgeAll()
         peekQueue.removeAll()
@@ -873,6 +949,79 @@ final class AppModel: ObservableObject {
         if settings.preferredScreenID != old.preferredScreenID {
             onLayoutChange?()
         }
+        if settings.systemNotifications && !old.systemNotifications {
+            requestNotificationPermission()
+        }
+        if settings.hotKey != old.hotKey {
+            applyHotKey()
+        }
+    }
+
+    // MARK: - Notificaciones de macOS, atajo global y filtro «Mías»
+
+    func requestNotificationPermission() {
+        notifier?.requestAuthorization { [weak self] permission in
+            self?.notificationPermission = permission
+        }
+    }
+
+    func refreshNotificationPermission() {
+        notifier?.currentPermission { [weak self] permission in
+            self?.notificationPermission = permission
+        }
+    }
+
+    func openNotificationSettings() {
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.joandev.notchwatch"
+        let candidates = [
+            "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=\(bundleID)",
+            "x-apple.systempreferences:com.apple.preference.notifications",
+        ]
+        for candidate in candidates {
+            if let url = URL(string: candidate), NSWorkspace.shared.open(url) { return }
+        }
+    }
+
+    private func applyHotKey() {
+        guard !isSnapshot else { return }
+        if hotKey == nil {
+            hotKey = GlobalHotKey { [weak self] in
+                self?.toggleIsland()
+            }
+        }
+        hotKeyError = hotKey?.apply(settings.hotKey)
+    }
+
+    /// Selector «Todas / Mías» de la isla desplegada.
+    func setShowOnlyMine(_ value: Bool) {
+        guard settings.showOnlyMine != value else { return }
+        withAnimation(.islandSpring) {
+            settings.showOnlyMine = value
+        }
+    }
+
+    /// Clic en una notificación de macOS o en una de sus acciones.
+    private func handleNotificationResponse(_ response: SystemNotifier.Response) {
+        let incident = response.incidentGid.flatMap { gid in
+            pending.first { $0.gid == gid }
+        }
+        switch response.action {
+        case SystemNotifier.Action.assign:
+            guard let incident else { return }
+            assignToMe(incident)
+            showFromCommand()
+        case SystemNotifier.Action.snooze:
+            guard let incident else { return }
+            snooze(incident, minutes: 60)
+        default:
+            if let incident {
+                open(incident)
+            } else if let url = response.url {
+                NSWorkspace.shared.open(url)
+            } else {
+                showFromCommand()
+            }
+        }
     }
 
     // MARK: - Simulación y demo
@@ -919,11 +1068,14 @@ final class AppModel: ObservableObject {
         mode: IslandMode,
         pending: [Incident],
         peek: Incident?,
-        notch: NotchMetrics = NotchMetrics(notchWidth: 200, notchHeight: 38, hasNotch: true)
+        notch: NotchMetrics = NotchMetrics(notchWidth: 200, notchHeight: 38, hasNotch: true),
+        showOnlyMine: Bool = false
     ) {
         self.notch = notch
         hasToken = true
         userName = "Joan Torres"
+        userGid = DemoData.snapshotUserGid
+        settings.showOnlyMine = showOnlyMine
         self.pending = pending
         self.peek = peek
         peekExtra = peek == nil ? 0 : 2
