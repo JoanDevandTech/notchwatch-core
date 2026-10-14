@@ -1,0 +1,105 @@
+{
+  "data": [
+    {
+      "gid": "1211000000000001",
+      "resource_type": "task",
+      "name": "No carga el listado de presupuestos",
+      "created_at": "2026-10-14T08:15:30.123Z",
+      "due_on": null,
+      "notes": "Pasos para reproducir:\n1. Entrar en Ventas > Presupuestos\n2. Filtrar por agente\n\nResumen automático\nErrores consola: 3/12\nURL: /ventas/presupuestos",
+      "permalink_url": "https://app.asana.com/1/1199999999999999/project/1216898612014391/task/1211000000000001",
+      "completed": false,
+      "assignee": null,
+      "custom_fields": [
+        {
+          "gid": "1219502866938804",
+          "resource_type": "custom_field",
+          "name": "Prioridad",
+          "resource_subtype": "enum",
+          "display_value": "Incidencia",
+          "enum_value": {
+            "gid": "1219502866938807",
+            "resource_type": "enum_option",
+            "name": "Incidencia",
+            "color": "red",
+            "enabled": true
+          }
+        },
+        {
+          "gid": "1216067243827070",
+          "resource_type": "custom_field",
+          "name": "Reportado por",
+          "resource_subtype": "text",
+          "display_value": "María López",
+          "text_value": "María López"
+        },
+        {
+          "gid": "1216067230748421",
+          "resource_type": "custom_field",
+          "name": "Módulo",
+          "resource_subtype": "enum",
+          "display_value": "Presupuestos",
+          "enum_value": {
+            "gid": "1216067230748422",
+            "resource_type": "enum_option",
+            "name": "Presupuestos",
+            "color": "blue",
+            "enabled": true
+          }
+        }
+      ]
+    },
+    {
+      "gid": "1211000000000002",
+      "resource_type": "task",
+      "name": "El total del presupuesto no suma el seguro",
+      "created_at": "2026-10-13T17:02:11Z",
+      "due_on": "2026-10-20",
+      "notes": "El seguro de cancelación no aparece en el total.",
+      "permalink_url": "https://app.asana.com/1/1199999999999999/project/1216898612014391/task/1211000000000002",
+      "completed": false,
+      "assignee": {
+        "gid": "1200000000000001",
+        "resource_type": "user",
+        "name": "Joan Torres"
+      },
+      "custom_fields": [
+        {
+          "gid": "1219502866938804",
+          "resource_type": "custom_field",
+          "name": "Prioridad",
+          "resource_subtype": "enum",
+          "display_value": "Prioridad Alta",
+          "enum_value": {
+            "gid": "1219502866938808",
+            "resource_type": "enum_option",
+            "name": "Prioridad Alta",
+            "color": "orange",
+            "enabled": true
+          }
+        },
+        {
+          "gid": "1216067243827070",
+          "resource_type": "custom_field",
+          "name": "Reportado por",
+          "resource_subtype": "text",
+          "display_value": null,
+          "text_value": null
+        },
+        {
+          "gid": "1216067230748421",
+          "resource_type": "custom_field",
+          "name": "Módulo",
+          "resource_subtype": "enum",
+          "display_value": null,
+          "enum_value": null
+        }
+      ]
+    }
+  ],
+  "next_page": {
+    "offset": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.cGFnZTI",
+    "path": "/tasks?section=1219500158564901&limit=100&offset=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.cGFnZTI",
+    "uri": "https://app.asana.com/api/1.0/tasks?section=1219500158564901&limit=100&offset=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.cGFnZTI"
+  }
+}

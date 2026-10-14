@@ -1,0 +1,65 @@
+{
+  "data": [
+    {
+      "gid": "1211000000000003",
+      "resource_type": "task",
+      "name": "Texto cortado en el botón de enviar",
+      "created_at": "2026-10-12T09:30:00.500Z",
+      "due_on": null,
+      "notes": "",
+      "permalink_url": "https://app.asana.com/1/1199999999999999/project/1216898612014391/task/1211000000000003",
+      "completed": false,
+      "assignee": null,
+      "custom_fields": [
+        {
+          "gid": "1219502866938804",
+          "resource_type": "custom_field",
+          "name": "Prioridad",
+          "resource_subtype": "enum",
+          "display_value": "Baja",
+          "enum_value": {
+            "gid": "1219502866938805",
+            "resource_type": "enum_option",
+            "name": "Baja",
+            "color": "green",
+            "enabled": true
+          }
+        }
+      ]
+    },
+    {
+      "gid": "1211000000000004",
+      "resource_type": "task",
+      "name": "Revisar log de llamadas duplicadas",
+      "created_at": "2026-10-11T11:00:00.000Z",
+      "due_on": null,
+      "notes": "**Errores consola:** 0/5",
+      "permalink_url": "https://app.asana.com/1/1199999999999999/project/1216898612014391/task/1211000000000004",
+      "completed": false,
+      "assignee": null,
+      "custom_fields": [
+        {
+          "gid": "1219502866938804",
+          "resource_type": "custom_field",
+          "name": "Prioridad",
+          "resource_subtype": "enum",
+          "display_value": null,
+          "enum_value": null
+        }
+      ]
+    },
+    {
+      "gid": "1211000000000005",
+      "resource_type": "task",
+      "name": "Incidencia ya resuelta",
+      "created_at": "2026-10-10T10:00:00.000Z",
+      "due_on": null,
+      "notes": "",
+      "permalink_url": "https://app.asana.com/1/1199999999999999/project/1216898612014391/task/1211000000000005",
+      "completed": true,
+      "assignee": null,
+      "custom_fields": []
+    }
+  ],
+  "next_page": null
+}
