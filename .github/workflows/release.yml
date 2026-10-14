@@ -23,6 +23,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # Lanzado a mano: compila exactamente el commit del tag.
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
       - name: Tests del núcleo
         run: swift test

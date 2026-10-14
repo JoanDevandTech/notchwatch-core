@@ -239,6 +239,11 @@ struct SettingsView: View {
                     githubDraft = ""
                 }
                 .disabled(githubDraft.isEmpty)
+                if model.hasGitHubToken {
+                    Button("Eliminar", role: .destructive) {
+                        model.saveGitHubToken("")
+                    }
+                }
                 Button("Buscar actualizaciones") {
                     Task { await model.checkForUpdates(silent: false) }
                 }

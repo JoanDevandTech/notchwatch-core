@@ -7,7 +7,7 @@ struct NotchShape: Shape {
     var topRadius: CGFloat
     var bottomRadius: CGFloat
 
-    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+    nonisolated var animatableData: AnimatablePair<CGFloat, CGFloat> {
         get { AnimatablePair(topRadius, bottomRadius) }
         set {
             topRadius = newValue.first

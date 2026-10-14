@@ -216,6 +216,7 @@ private struct ExpandedContent: View {
                     .padding(.horizontal, 12)
             }
             list
+                .layoutPriority(1)
             Spacer(minLength: 0)
             footer
                 .frame(height: IslandLayout.footerHeight)

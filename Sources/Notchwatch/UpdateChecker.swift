@@ -22,7 +22,12 @@ enum UpdateChecker {
         request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
         request.timeoutInterval = 15
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return nil }
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        // 404: todavía no hay ninguna release publicada.
+        if http.statusCode == 404 { return nil }
+        guard http.statusCode == 200 else {
+            throw URLError(http.statusCode == 401 || http.statusCode == 403 ? .userAuthenticationRequired : .badServerResponse)
+        }
         let release = try JSONDecoder().decode(Release.self, from: data)
         let version = release.tagName.hasPrefix("v") ? String(release.tagName.dropFirst()) : release.tagName
         guard isNewer(version, than: currentVersion), let url = URL(string: release.htmlURL) else { return nil }

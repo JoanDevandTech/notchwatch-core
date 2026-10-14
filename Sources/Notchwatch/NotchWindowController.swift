@@ -68,18 +68,22 @@ final class NotchWindowController {
         panel.setFrame(NSRect(origin: origin, size: size), display: true)
     }
 
-    /// Sigue el puntero (20 Hz): hover de la isla y paso de clics fuera de su silueta.
+    /// Sigue el puntero: rápido (25 Hz) cerca de la parte superior de la pantalla y más
+    /// despacio (6 Hz) cuando el cursor está lejos, para no gastar batería.
     private func startTracking() {
         trackingTask?.cancel()
         trackingTask = Task { [weak self] in
             while !Task.isCancelled {
-                self?.updatePointer()
-                try? await Task.sleep(nanoseconds: 50_000_000)
+                guard let self else { return }
+                let near = self.updatePointer()
+                try? await Task.sleep(nanoseconds: near ? 40_000_000 : 160_000_000)
             }
         }
     }
 
-    private func updatePointer() {
+    /// Hover de la isla y paso de clics fuera de su silueta. Devuelve si el cursor anda cerca.
+    @discardableResult
+    private func updatePointer() -> Bool {
         let size = IslandLayout.size(
             for: model.mode,
             notch: model.notch,
@@ -87,17 +91,21 @@ final class NotchWindowController {
             hasBanner: model.banner != nil
         )
         let frame = panel.frame
+        // En reposo, la zona activa es exactamente la píldora (no robar clics a la barra de menús).
+        let margin: CGFloat = model.mode == .idle ? 0 : 4
         let island = NSRect(
             x: frame.midX - size.width / 2,
             y: frame.maxY - size.height,
             width: size.width,
             height: size.height
-        ).insetBy(dx: -4, dy: -4)
-        let inside = island.contains(NSEvent.mouseLocation)
+        ).insetBy(dx: -margin, dy: -margin)
+        let location = NSEvent.mouseLocation
+        let inside = island.contains(location)
         if panel.ignoresMouseEvents == inside {
             panel.ignoresMouseEvents = !inside
         }
         model.setHovering(inside)
+        return inside || location.y > frame.maxY - 220
     }
 }
 

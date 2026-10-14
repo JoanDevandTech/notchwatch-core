@@ -94,6 +94,8 @@ final class AppModel: ObservableObject {
     private var rateLimitDelay: TimeInterval?
     private var didPromptForSettings = false
     private var observers: [NSObjectProtocol] = []
+    /// Token de GitHub en memoria: se lee una vez del Llavero (cada lectura puede pedir permiso).
+    private var githubToken: String?
     private let log = Logger(subsystem: "com.joandev.notchwatch", category: "model")
 
     init(demo: Bool, snapshot: Bool = false) {
@@ -104,7 +106,8 @@ final class AppModel: ObservableObject {
         settings = loaded
         config = AppModel.makeConfig(from: loaded)
         if !snapshot {
-            hasGitHubToken = KeychainStore.read(.githubToken) != nil
+            githubToken = KeychainStore.read(.githubToken)
+            hasGitHubToken = githubToken != nil
             observeMenuTracking()
         }
     }
@@ -269,8 +272,10 @@ final class AppModel: ObservableObject {
     }
 
     func pollOnce() async {
-        guard let monitor else { return }
+        guard let monitor, client != nil else { return }
         let outcome = await monitor.poll()
+        // El token pudo borrarse mientras se consultaba.
+        guard client != nil else { return }
         apply(outcome)
     }
 
@@ -283,6 +288,11 @@ final class AppModel: ObservableObject {
         let keep = Set(pending.map(\.gid))
         snoozedUntil = snoozedUntil.filter { keep.contains($0.key) }
         unacknowledgedLoud = unacknowledgedLoud.filter { keep.contains($0) }
+        peekQueue.removeAll { !keep.contains($0.gid) }
+        if let current = peek, !keep.contains(current.gid) {
+            peekTask?.cancel()
+            endPeek()
+        }
         updateErrors(outcome.errors)
 
         let wasFirstPoll = isFirstPoll
@@ -352,9 +362,14 @@ final class AppModel: ObservableObject {
         playSound(for: top.priority)
         if mode == .expanded {
             // Ya está desplegada: basta con el halo y el sonido.
-            glowPriority = top.priority
             peekQueue.removeAll()
             batchExtra = 0
+            if isHovering {
+                // La estás mirando: cuenta como atendida, sin repetir el sonido.
+                for incident in sorted { unacknowledgedLoud.remove(incident.gid) }
+                return
+            }
+            glowPriority = top.priority
         } else {
             showNextPeekIfPossible()
         }
@@ -439,13 +454,31 @@ final class AppModel: ObservableObject {
         hoverTask?.cancel()
         if hovering {
             hoveredSinceCommand = true
-            guard settings.expandOnHover || mode != .idle else { return }
+            if mode == .expanded {
+                acknowledgeAll()
+                return
+            }
+            if mode == .peek, let gid = peek?.gid {
+                // Pasar el ratón por el aviso lo da por atendido y lo mantiene abierto mientras estés encima.
+                acknowledge(gid)
+                peekTask?.cancel()
+                return
+            }
+            guard settings.expandOnHover else { return }
             hoverTask = Task { [weak self] in
-                try? await Task.sleep(nanoseconds: 140_000_000)
+                try? await Task.sleep(nanoseconds: 300_000_000)
                 guard !Task.isCancelled else { return }
                 self?.expand()
             }
         } else {
+            if mode == .peek, let current = peek, !unacknowledgedLoud.contains(current.gid) {
+                peekTask?.cancel()
+                peekTask = Task { [weak self] in
+                    try? await Task.sleep(nanoseconds: 4_000_000_000)
+                    guard !Task.isCancelled else { return }
+                    self?.endPeek()
+                }
+            }
             scheduleCollapseIfNeeded()
         }
     }
@@ -483,12 +516,20 @@ final class AppModel: ObservableObject {
         expandedByCommand = true
         hoveredSinceCommand = isHovering
         expand()
+        armCommandTimeout(seconds: 10)
+    }
+
+    private func armCommandTimeout(seconds: Double) {
         hoverTask?.cancel()
         hoverTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 10_000_000_000)
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
             guard !Task.isCancelled, let self else { return }
-            guard !self.isHovering, !self.menuTracking, !self.hoveredSinceCommand else { return }
-            self.collapse()
+            guard self.mode == .expanded, !self.isHovering, !self.hoveredSinceCommand else { return }
+            if self.menuTracking {
+                self.armCommandTimeout(seconds: 2)
+            } else {
+                self.collapse()
+            }
         }
     }
 
@@ -762,6 +803,14 @@ final class AppModel: ObservableObject {
         client = nil
         hasToken = false
         userName = nil
+        connectionIssue = nil
+        acknowledgeAll()
+        peekQueue.removeAll()
+        batchExtra = 0
+        if mode == .peek {
+            peekTask?.cancel()
+            endPeek()
+        }
         withAnimation(.islandSnappy) { pending = [] }
     }
 
@@ -769,17 +818,21 @@ final class AppModel: ObservableObject {
         let token = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if token.isEmpty {
             KeychainStore.delete(.githubToken)
+            githubToken = nil
+            update = nil
         } else {
             KeychainStore.save(token, account: .githubToken)
+            githubToken = token
         }
-        hasGitHubToken = !token.isEmpty
+        hasGitHubToken = githubToken != nil
+        guard githubToken != nil else { return }
         Task { [weak self] in
             await self?.checkForUpdates(silent: false)
         }
     }
 
     func checkForUpdates(silent: Bool) async {
-        guard let token = KeychainStore.read(.githubToken), !token.isEmpty else {
+        guard let token = githubToken, !token.isEmpty else {
             if !silent { NSWorkspace.shared.open(UpdateChecker.releasesPage) }
             return
         }
@@ -839,14 +892,22 @@ final class AppModel: ObservableObject {
         demoTask?.cancel()
         demoTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 1_500_000_000)
-            guard let self else { return }
-            self.announce(Array(self.pending.prefix(3)), asBatch: true)
+            if let self {
+                self.announce(Array(self.pending.prefix(3)), asBatch: true)
+            } else {
+                return
+            }
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 12_000_000_000)
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, let self else { return }
                 let incident = DemoData.randomIncident()
                 self.simulated.insert(incident.gid)
-                withAnimation(.islandSnappy) { self.pending.insert(incident, at: 0) }
+                withAnimation(.islandSnappy) {
+                    self.pending.insert(incident, at: 0)
+                    if self.pending.count > 12 {
+                        self.simulated.remove(self.pending.removeLast().gid)
+                    }
+                }
                 self.lastPoll = Date()
                 self.announce([incident], asBatch: false)
             }

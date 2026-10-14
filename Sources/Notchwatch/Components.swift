@@ -175,6 +175,20 @@ struct IncidentMetaLine: View {
     }
 }
 
+// MARK: - Entorno
+
+private struct SnapshotRenderKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// `true` al renderizar capturas con ImageRenderer: se evitan controles que no sabe pintar (Menu).
+    var isSnapshotRender: Bool {
+        get { self[SnapshotRenderKey.self] }
+        set { self[SnapshotRenderKey.self] = newValue }
+    }
+}
+
 // MARK: - Efectos
 
 /// Halo animado alrededor de la isla en el color de la prioridad (gradiente angular que gira).
@@ -189,7 +203,7 @@ struct GlowRing: View {
         if isStatic {
             ring(angle: .degrees(35), intensity: 1)
         } else {
-            TimelineView(.animation) { timeline in
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
                 let seconds = timeline.date.timeIntervalSinceReferenceDate
                 let angle = Angle.degrees((seconds * 140).truncatingRemainder(dividingBy: 360))
                 let wave = 0.5 + 0.5 * sin(seconds * 5)

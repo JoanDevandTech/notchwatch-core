@@ -33,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func launch() {
+        installEditMenu()
         let model = AppModel(demo: arguments.demo)
         let settings = SettingsWindowController(model: model)
         let datePicker = DatePickerWindowController()
@@ -62,6 +63,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         island.show()
         model.start()
+    }
+
+    /// Las apps de barra de menús no tienen menú principal: sin un menú Edición (invisible),
+    /// ⌘C / ⌘V / ⌘A no llegan a los campos de texto de Ajustes (p. ej. al pegar el token).
+    private func installEditMenu() {
+        let edit = NSMenu(title: "Edición")
+        edit.addItem(withTitle: "Deshacer", action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: "Rehacer", action: Selector(("redo:")), keyEquivalent: "Z")
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Cortar", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copiar", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Pegar", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Seleccionar todo", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        let editItem = NSMenuItem()
+        editItem.submenu = edit
+        let mainMenu = NSMenu()
+        mainMenu.addItem(editItem)
+        NSApp.mainMenu = mainMenu
     }
 
     /// Comprueba que la UI se monta sin red ni permisos y sale. Lo usa la CI.

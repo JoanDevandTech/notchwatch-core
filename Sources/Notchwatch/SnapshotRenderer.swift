@@ -83,5 +83,6 @@ struct SnapshotCanvas: View {
         }
         .frame(width: max(size.width + 180, 680), height: size.height + 90, alignment: .top)
         .environment(\.colorScheme, .dark)
+        .environment(\.isSnapshotRender, true)
     }
 }

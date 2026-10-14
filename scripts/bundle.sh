@@ -21,7 +21,7 @@ BUILD_NUMBER="${BUILD_NUMBER:-$(git rev-list --count HEAD 2>/dev/null || echo 1)
 echo "▸ Compilando $APP_NAME $VERSION ($BUILD_NUMBER)"
 if [[ "${UNIVERSAL:-0}" == "1" ]]; then
   swift build -c release --arch arm64 --arch x86_64
-  BIN=".build/apple/Products/Release/$APP_NAME"
+  BIN="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/$APP_NAME"
 else
   swift build -c release
   BIN="$(swift build -c release --show-bin-path)/$APP_NAME"
@@ -36,6 +36,11 @@ echo "▸ Montando $APP"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/$APP_NAME"
+if [[ "${UNIVERSAL:-0}" == "1" ]]; then
+  # El self-test solo ejecuta la arquitectura del runner: comprobamos que van las dos.
+  lipo -verify_arch arm64 x86_64 "$APP/Contents/MacOS/$APP_NAME"
+  echo "  binario universal: $(lipo -archs "$APP/Contents/MacOS/$APP_NAME")"
+fi
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
 cat > "$APP/Contents/Info.plist" <<PLIST

@@ -34,16 +34,19 @@ Notchwatch es una isla flotante, al estilo de la Dynamic Island del iPhone, que 
 ## Instalación
 
 1. Descarga el `.dmg` de la última versión en **Releases** y arrastra Notchwatch a **Aplicaciones**.
-2. La app no está firmada con un certificado de Apple. La primera vez, haz **clic derecho → Abrir** y confirma. También puedes ejecutar:
-   ```bash
-   xattr -dr com.apple.quarantine /Applications/Notchwatch.app
-   ```
+2. La app no está firmada con un certificado de Apple, así que la primera vez macOS la bloquea:
+   - **macOS 15 o superior:** intenta abrirla, ve a *Ajustes del Sistema → Privacidad y seguridad* y pulsa **«Abrir igualmente»**.
+   - **macOS 13–14:** **clic derecho → Abrir** y confirma.
+   - **En cualquier versión**, desde Terminal:
+     ```bash
+     xattr -dr com.apple.quarantine /Applications/Notchwatch.app
+     ```
 3. Al abrirse por primera vez aparece la ventana de Ajustes: pega tu **token personal de Asana** y pulsa *Guardar y probar*.
    - Para crear el token, ve en Asana a *Mi configuración → Apps → Consola de desarrolladores → Token de acceso personal* (https://app.asana.com/0/my-apps).
    - El token solo se guarda en el **Llavero** de tu Mac.
 4. Opcional: en *Ajustes → General*, activa **Iniciar Notchwatch al arrancar el Mac**.
 
-> La app va firmada ad-hoc, así que tras actualizar macOS puede pedirte permiso para leer el token del Llavero. Pulsa «Permitir siempre».
+> La app va firmada ad-hoc, así que cada versión nueva tiene una firma distinta y macOS te pedirá una vez permiso para leer el token del Llavero. Pulsa **«Permitir siempre»**.
 
 ## Cómo decide qué avisar
 

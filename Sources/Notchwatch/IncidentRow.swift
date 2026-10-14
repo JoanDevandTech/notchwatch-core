@@ -4,6 +4,7 @@ import NotchwatchCore
 /// Fila de una incidencia en la isla desplegada, con sus acciones rápidas.
 struct IncidentRow: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.isSnapshotRender) private var isSnapshotRender
     let incident: Incident
     @State private var hovering = false
 
@@ -98,36 +99,35 @@ struct IncidentRow: View {
             IslandIconButton(symbol: "checkmark.circle", help: "Pasar a Verificación") {
                 model.moveToVerification(incident)
             }
-            Menu {
-                snoozeItems
-            } label: {
-                MenuIcon(symbol: "moon.zzz")
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .help("Posponer")
-            Menu {
-                dateItems
-            } label: {
-                MenuIcon(symbol: "calendar")
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .help("Cambiar fecha")
-            Menu {
-                priorityItems
-            } label: {
-                MenuIcon(symbol: "flag.fill")
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .help("Cambiar prioridad")
+            menuButton("moon.zzz", help: "Posponer") { snoozeItems }
+            menuButton("calendar", help: "Cambiar fecha") { dateItems }
+            menuButton("flag.fill", help: "Cambiar prioridad") { priorityItems }
             IslandIconButton(symbol: "eye.slash", help: "Marcar como vista") {
                 model.markSeen(incident)
             }
+        }
+    }
+
+    /// Menú desplegable con icono redondo (en las capturas se pinta solo el icono).
+    @ViewBuilder
+    private func menuButton<Items: View>(
+        _ symbol: String,
+        help: String,
+        @ViewBuilder items: () -> Items
+    ) -> some View {
+        if isSnapshotRender {
+            MenuIcon(symbol: symbol)
+        } else {
+            let content = items()
+            Menu {
+                content
+            } label: {
+                MenuIcon(symbol: symbol)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help(help)
         }
     }
 
