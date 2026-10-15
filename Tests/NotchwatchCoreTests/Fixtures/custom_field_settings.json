@@ -1,0 +1,55 @@
+{
+  "data": [
+    {
+      "gid": "1219502866938900",
+      "resource_type": "custom_field_setting",
+      "custom_field": {
+        "gid": "1219502866938804",
+        "resource_type": "custom_field",
+        "name": "Prioridad",
+        "type": "enum",
+        "enum_options": [
+          { "gid": "1219502866938805", "resource_type": "enum_option", "name": "Baja", "enabled": true },
+          { "gid": "1219502866938806", "resource_type": "enum_option", "name": "Media", "enabled": true },
+          { "gid": "1219502866938807", "resource_type": "enum_option", "name": "Incidencia (urgente)", "enabled": true },
+          { "gid": "1219502866938808", "resource_type": "enum_option", "name": "Prioridad Alta", "enabled": true },
+          { "gid": "1219502866938809", "resource_type": "enum_option", "name": "Antigua", "enabled": false }
+        ]
+      }
+    },
+    {
+      "gid": "1214163825159900",
+      "resource_type": "custom_field_setting",
+      "custom_field": {
+        "gid": "1214163825159804",
+        "resource_type": "custom_field",
+        "name": "Estado",
+        "type": "enum",
+        "enum_options": [
+          { "gid": "1214163825159805", "resource_type": "enum_option", "name": "En curso", "enabled": true },
+          { "gid": "1214163825159806", "resource_type": "enum_option", "name": "Bloqueada", "enabled": true }
+        ]
+      }
+    },
+    {
+      "gid": "1216067243827100",
+      "resource_type": "custom_field_setting",
+      "custom_field": {
+        "gid": "1216067243827070",
+        "resource_type": "custom_field",
+        "name": "Reportado por",
+        "type": "text"
+      }
+    },
+    {
+      "gid": "1216067230748500",
+      "resource_type": "custom_field_setting",
+      "custom_field": {
+        "gid": "1216067230748421",
+        "resource_type": "custom_field",
+        "name": "Módulo",
+        "type": "text"
+      }
+    }
+  ]
+}

@@ -6,7 +6,9 @@ import Foundation
 public enum IncidentPriority: String, Codable, CaseIterable, Sendable, Comparable {
     case baja, media, alta, urgente, ninguna
 
-    /// Peso numérico usado para ordenar.
+    /// De más a menos importante.
+    public static let descending: [IncidentPriority] = [.urgente, .alta, .media, .baja, .ninguna]
+
     var rank: Int {
         switch self {
         case .ninguna: return 0
@@ -21,139 +23,41 @@ public enum IncidentPriority: String, Codable, CaseIterable, Sendable, Comparabl
         lhs.rank < rhs.rank
     }
 
-    /// Etiqueta en español para la UI.
-    public var label: String {
-        switch self {
-        case .baja: return "Baja"
-        case .media: return "Media"
-        case .alta: return "Alta"
-        case .urgente: return "Urgente"
-        case .ninguna: return "Sin prioridad"
-        }
-    }
-
-    /// Las prioridades "ruidosas" (alta y urgente) usan sonido urgente y se repiten.
+    /// Alta y urgente: sonido insistente que se repite hasta que se atiende.
     public var isLoud: Bool {
         self == .alta || self == .urgente
     }
 }
 
-/// Permite que `[IncidentPriority: String]` se codifique como objeto JSON
-/// (`{"alta": "…"}`) en lugar de como array plano clave/valor.
 extension IncidentPriority: CodingKeyRepresentable {}
-
-// MARK: - Configuración de proyecto
-
-/// GIDs de las secciones del tablero de incidencias de un proyecto.
-public struct ProjectSections: Codable, Hashable, Sendable {
-    public var features: String
-    public var detectadas: String
-    public var verificacion: String
-    public var solucion: String
-    public var validacion: String
-    public var seguimientoInicial: String
-    public var seguimientoSemana: String
-    public var historico: String
-
-    public init(
-        features: String,
-        detectadas: String,
-        verificacion: String,
-        solucion: String,
-        validacion: String,
-        seguimientoInicial: String,
-        seguimientoSemana: String,
-        historico: String
-    ) {
-        self.features = features
-        self.detectadas = detectadas
-        self.verificacion = verificacion
-        self.solucion = solucion
-        self.validacion = validacion
-        self.seguimientoInicial = seguimientoInicial
-        self.seguimientoSemana = seguimientoSemana
-        self.historico = historico
-    }
-}
-
-/// Campo personalizado (enum) de prioridad de un proyecto y sus opciones.
-public struct PriorityField: Codable, Hashable, Sendable {
-    public var fieldGid: String
-    /// prioridad -> GID de la enum_option en Asana.
-    public var options: [IncidentPriority: String]
-
-    public init(fieldGid: String, options: [IncidentPriority: String]) {
-        self.fieldGid = fieldGid
-        self.options = options
-    }
-
-    /// Traduce el GID de la opción seleccionada a prioridad (`.ninguna` si no hay o no se reconoce).
-    public func priority(forOptionGid gid: String?) -> IncidentPriority {
-        guard let gid, !gid.isEmpty else { return .ninguna }
-        // Recorremos en orden fijo para que el resultado sea determinista.
-        for priority in IncidentPriority.allCases where options[priority] == gid {
-            return priority
-        }
-        return .ninguna
-    }
-}
-
-/// Proyecto de Asana vigilado.
-public struct WatchedProject: Codable, Hashable, Identifiable, Sendable {
-    public var id: String { key }
-    /// Clave estable: "ventas", "finanzas", "operaciones", "traslados", "mailing", "mitbc", "general".
-    public var key: String
-    public var name: String
-    public var projectGid: String
-    public var sections: ProjectSections
-    public var priorityField: PriorityField
-    public var enabled: Bool
-
-    public init(
-        key: String,
-        name: String,
-        projectGid: String,
-        sections: ProjectSections,
-        priorityField: PriorityField,
-        enabled: Bool = true
-    ) {
-        self.key = key
-        self.name = name
-        self.projectGid = projectGid
-        self.sections = sections
-        self.priorityField = priorityField
-        self.enabled = enabled
-    }
-}
 
 // MARK: - Incidencia
 
-/// Incidencia abierta (tarea de Asana en la sección "detectadas").
+/// Incidencia abierta en una colección de una fuente (en Asana, una tarea en la sección «Detectadas»).
 public struct Incident: Codable, Hashable, Identifiable, Sendable {
-    public var id: String { gid }
-    public let gid: String
-    public var projectKey: String
-    public var projectName: String
+    /// Identificador en la fuente (GID en Asana). Único dentro de la fuente.
+    public let id: String
+    /// `WatchedCollection.id` a la que pertenece.
+    public var collectionID: String
+    /// Nombre corto de la colección para chips y notificaciones («Finanzas»).
+    public var collectionName: String
     public var name: String
     public var priority: IncidentPriority
-    /// Campo personalizado "Reportado por".
     public var reporter: String?
-    /// Campo personalizado "Módulo".
     public var module: String?
-    /// X de "Errores consola: X/Y" en las notas.
+    /// Errores de consola que acompañan al ticket, si se conocen.
     public var consoleErrors: Int?
     public var createdAt: Date
-    /// Fecha de vencimiento "YYYY-MM-DD".
+    /// Vencimiento «YYYY-MM-DD».
     public var dueOn: String?
+    public var assigneeID: String?
     public var assigneeName: String?
     public var permalinkURL: URL?
-    /// GID del usuario asignado (para el filtro «Mías»).
-    public var assigneeGid: String?
 
     public init(
-        gid: String,
-        projectKey: String,
-        projectName: String,
+        id: String,
+        collectionID: String,
+        collectionName: String,
         name: String,
         priority: IncidentPriority = .ninguna,
         reporter: String? = nil,
@@ -161,13 +65,13 @@ public struct Incident: Codable, Hashable, Identifiable, Sendable {
         consoleErrors: Int? = nil,
         createdAt: Date,
         dueOn: String? = nil,
+        assigneeID: String? = nil,
         assigneeName: String? = nil,
-        permalinkURL: URL? = nil,
-        assigneeGid: String? = nil
+        permalinkURL: URL? = nil
     ) {
-        self.gid = gid
-        self.projectKey = projectKey
-        self.projectName = projectName
+        self.id = id
+        self.collectionID = collectionID
+        self.collectionName = collectionName
         self.name = name
         self.priority = priority
         self.reporter = reporter
@@ -175,21 +79,36 @@ public struct Incident: Codable, Hashable, Identifiable, Sendable {
         self.consoleErrors = consoleErrors
         self.createdAt = createdAt
         self.dueOn = dueOn
+        self.assigneeID = assigneeID
         self.assigneeName = assigneeName
         self.permalinkURL = permalinkURL
-        self.assigneeGid = assigneeGid
+    }
+
+    /// true si está asignada al usuario indicado. Si se conocen los dos identificadores deciden ellos
+    /// (dos personas pueden llamarse igual); si no, se comparan los nombres sin distinguir mayúsculas.
+    public func isAssigned(toUserID userID: String?, name userName: String?) -> Bool {
+        if let assignee = Text.nonEmpty(assigneeID), let user = Text.nonEmpty(userID) {
+            return assignee == user
+        }
+        if let assignee = Text.nonEmpty(assigneeName), let user = Text.nonEmpty(userName) {
+            return assignee.lowercased() == user.lowercased()
+        }
+        return false
     }
 }
 
 // MARK: - Errores
 
-/// Errores del cliente de Asana.
-public enum AsanaError: Error, Equatable, Sendable {
+/// Errores de cualquier fuente de incidencias.
+public enum SourceError: Error, Equatable, Sendable {
     case unauthorized
     case rateLimited(retryAfter: TimeInterval?)
+    /// Sin red o la petición no llegó a completarse.
+    case network(String)
     case http(Int, String)
     case decoding(String)
-    case invalidURL
+    /// La configuración de la fuente no sirve (falta una sección, un campo, una URL válida…).
+    case invalidConfiguration(String)
 }
 
 // MARK: - Resultados
@@ -209,14 +128,25 @@ public struct DiffResult: Equatable, Sendable {
 public struct PollOutcome: Sendable {
     public var newIncidents: [Incident]
     public var pending: [Incident]
-    /// Errores por clave de proyecto.
-    public var errors: [String: AsanaError]
+    /// Errores por `WatchedCollection.id`.
+    public var errors: [String: SourceError]
     public var date: Date
 
-    public init(newIncidents: [Incident], pending: [Incident], errors: [String: AsanaError], date: Date) {
+    public init(newIncidents: [Incident], pending: [Incident], errors: [String: SourceError], date: Date) {
         self.newIncidents = newIncidents
         self.pending = pending
         self.errors = errors
         self.date = date
+    }
+}
+
+// MARK: - Utilidades
+
+public enum Text {
+    /// Recorta espacios y devuelve nil si no queda nada.
+    public static func nonEmpty(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

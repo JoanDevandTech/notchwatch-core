@@ -93,7 +93,7 @@ final class TestClock: @unchecked Sendable {
     }
 }
 
-/// Interruptor para simular caídas de un proyecto.
+/// Interruptor para simular caídas de una colección.
 final class FailSwitch: @unchecked Sendable {
     private let lock = NSLock()
     private var value: Bool
@@ -113,6 +113,62 @@ final class FailSwitch: @unchecked Sendable {
             defer { lock.unlock() }
             value = newValue
         }
+    }
+}
+
+/// Fuente falsa: sirve listas fijas por colección y puede fallar bajo demanda.
+final class FakeSource: IncidentSource, @unchecked Sendable {
+    let id: String
+    let kind: SourceKind = .asana
+    let displayName: String
+    let collections: [WatchedCollection]
+    let capabilities: SourceCapabilities = [.assignToMe, .dueDate]
+
+    private let lock = NSLock()
+    private var incidentsByCollection: [String: [Incident]]
+    private var failures: [String: SourceError] = [:]
+    private(set) var performed: [(IncidentAction, Incident)] = []
+
+    init(id: String, collections: [WatchedCollection], incidents: [String: [Incident]] = [:]) {
+        self.id = id
+        self.displayName = id
+        self.collections = collections
+        self.incidentsByCollection = incidents
+    }
+
+    func setIncidents(_ incidents: [Incident], for collectionID: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        incidentsByCollection[collectionID] = incidents
+    }
+
+    func setFailure(_ error: SourceError?, for collectionID: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        failures[collectionID] = error
+    }
+
+    func identity() async throws -> SourceIdentity {
+        SourceIdentity(userID: "u-\(id)", name: "Usuario \(id)")
+    }
+
+    func openIncidents(in collection: WatchedCollection) async throws -> [Incident] {
+        try withLock {
+            if let error = failures[collection.id] {
+                throw error
+            }
+            return incidentsByCollection[collection.id] ?? []
+        }
+    }
+
+    func perform(_ action: IncidentAction, on incident: Incident) async throws {
+        withLock { performed.append((action, incident)) }
+    }
+
+    private func withLock<T>(_ body: () throws -> T) rethrows -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return try body()
     }
 }
 
@@ -158,38 +214,54 @@ func isoDate(_ string: String) -> Date {
     return date
 }
 
-/// Incidencia de prueba.
+/// Identificador de colección del preajuste de Tubuencamino para una clave.
+func tbcCollectionID(_ key: String) -> String {
+    WatchedCollection.makeID(sourceID: AsanaPresets.tubuencaminoSourceID, key: key)
+}
+
+/// Nombre corto de la colección del preajuste; la clave misma si no existe.
+func tbcCollectionName(_ key: String) -> String {
+    AsanaPresets.tubuencamino.projects.first(where: { $0.collection.id == tbcCollectionID(key) })?.collection.name ?? key
+}
+
+/// Incidencia de prueba en una colección del preajuste de Tubuencamino.
 func sampleIncident(
-    _ gid: String,
+    _ id: String,
     priority: IncidentPriority = .media,
     createdAt: Date,
-    projectKey: String = "ventas"
+    collectionKey: String = "ventas"
 ) -> Incident {
     Incident(
-        gid: gid,
-        projectKey: projectKey,
-        projectName: "Ventas Incidencias",
-        name: "Incidencia \(gid)",
+        id: id,
+        collectionID: tbcCollectionID(collectionKey),
+        collectionName: tbcCollectionName(collectionKey),
+        name: "Incidencia \(id)",
         priority: priority,
         createdAt: createdAt
     )
 }
 
-/// Proyecto de la config por defecto por clave.
-func defaultProject(_ key: String) throws -> WatchedProject {
+/// Proyecto del preajuste por clave.
+func presetProject(_ key: String) throws -> AsanaProjectConfig {
     try XCTUnwrap(
-        NotchwatchConfig.tubuencamino.projects.first(where: { $0.key == key }),
+        AsanaPresets.tubuencamino.projects.first(where: { $0.collection.id == tbcCollectionID(key) }),
         "Proyecto desconocido: \(key)"
     )
 }
 
-/// Config por defecto con solo los proyectos indicados activos.
-func defaultConfig(enabling keys: Set<String>) -> NotchwatchConfig {
-    var config = NotchwatchConfig.tubuencamino
+/// Preajuste con solo los proyectos indicados activos.
+func presetConfig(enabling keys: Set<String>) -> AsanaSourceConfig {
+    var config = AsanaPresets.tubuencamino
     for index in config.projects.indices {
-        config.projects[index].enabled = keys.contains(config.projects[index].key)
+        let key = config.projects[index].collection.id.split(separator: "/").last.map(String.init) ?? ""
+        config.projects[index].collection.enabled = keys.contains(key)
     }
     return config
+}
+
+/// Fuente Asana sobre el preajuste con el transporte indicado.
+func presetSource(enabling keys: Set<String>, token: String = "tok", transport: HTTPTransport) -> AsanaSource {
+    AsanaSource(config: presetConfig(enabling: keys), token: token, transport: transport)
 }
 
 // MARK: - Ficheros temporales
