@@ -676,7 +676,7 @@ final class IncidentMonitorScopeTests: XCTestCase {
         ]])
         let monitor = makeMonitor(source: source, storeURL: storeURL)
         _ = await monitor.poll()
-        XCTAssertEqual(Set(try loadStore(at: storeURL).assignees.keys), ["abierta"])
+        XCTAssertEqual(try Set(loadStore(at: storeURL).assignees.keys), ["abierta"])
 
         source.setIncidents([], for: collection.id)
         _ = await monitor.poll()
