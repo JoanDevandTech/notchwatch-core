@@ -84,14 +84,18 @@ public struct PriorityField: Codable, Hashable, Sendable {
     }
 }
 
-/// Campo enum de estado y la opción que significa «en curso».
+/// Campo enum de estado con las opciones que significan «en curso» y «solucionada».
+/// `solvedOptionGid` es opcional para leer perfiles guardados antes de existir; si falta,
+/// el cliente la busca en Asana al resolver.
 public struct StatusField: Codable, Hashable, Sendable {
     public var fieldGid: String
     public var inProgressOptionGid: String
+    public var solvedOptionGid: String?
 
-    public init(fieldGid: String, inProgressOptionGid: String) {
+    public init(fieldGid: String, inProgressOptionGid: String, solvedOptionGid: String? = nil) {
         self.fieldGid = fieldGid
         self.inProgressOptionGid = inProgressOptionGid
+        self.solvedOptionGid = solvedOptionGid
     }
 }
 

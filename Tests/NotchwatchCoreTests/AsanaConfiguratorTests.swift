@@ -31,7 +31,7 @@ final class AsanaConfiguratorTests: XCTestCase {
                 enumField("f-pri", "Prioridad", [
                     ("o-urg", "Incidencia (urgente)"), ("o-alta", "Prioridad Alta"), ("o-media", "Media"), ("o-baja", "Baja"),
                 ]),
-                enumField("f-est", "Estado", [("o-curso", "En curso"), ("o-bloq", "Bloqueada")]),
+                enumField("f-est", "Estado", [("o-curso", "En curso"), ("o-bloq", "Bloqueada"), ("o-sol", "Solucionada")]),
                 textField("f-rep", "Reportado por"),
                 textField("f-mod", "Módulo"),
             ]
@@ -49,7 +49,7 @@ final class AsanaConfiguratorTests: XCTestCase {
         XCTAssertEqual(config.priorityField, PriorityField(fieldGid: "f-pri", options: [
             .urgente: "o-urg", .alta: "o-alta", .media: "o-media", .baja: "o-baja",
         ]))
-        XCTAssertEqual(config.statusField, StatusField(fieldGid: "f-est", inProgressOptionGid: "o-curso"))
+        XCTAssertEqual(config.statusField, StatusField(fieldGid: "f-est", inProgressOptionGid: "o-curso", solvedOptionGid: "o-sol"))
         XCTAssertEqual(config.reporterFieldGid, "f-rep")
         XCTAssertEqual(config.moduleFieldGid, "f-mod")
     }

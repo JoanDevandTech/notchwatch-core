@@ -138,7 +138,7 @@ final class AsanaSourceTests: XCTestCase {
         XCTAssertTrue(transport.requests.isEmpty)
     }
 
-    func testResolveMovesToTheResolvedSectionOfTheProject() async throws {
+    func testResolveMovesToTheResolvedSectionAndMarksItSolved() async throws {
         let transport = MockTransport { _ in MockResponse() }
         let source = presetSource(enabling: ["ventas", "general"], transport: transport)
 
@@ -146,12 +146,15 @@ final class AsanaSourceTests: XCTestCase {
         try await source.perform(.resolve, on: incident(in: "general"))
 
         let requests = transport.requests
-        XCTAssertEqual(requests.map(\.httpMethod), ["POST", "POST"])
+        XCTAssertEqual(requests.map(\.httpMethod), ["POST", "PUT", "POST", "PUT"])
         XCTAssertEqual(requests.map { $0.url?.absoluteString }, [
             "https://app.asana.com/api/1.0/sections/1219499888926675/addTask",
+            taskURL,
             "https://app.asana.com/api/1.0/sections/1214164017398879/addTask",
+            taskURL,
         ])
         XCTAssertEqual(bodyString(requests[0]), #"{"data":{"task":"1211000000000001"}}"#)
+        XCTAssertEqual(bodyString(requests[1]), #"{"data":{"custom_fields":{"1214163825159804":"1214163825159829"}}}"#)
     }
 
     func testResolveWithoutResolvedSectionIsInvalidConfigurationAndSendsNothing() async throws {

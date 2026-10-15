@@ -94,6 +94,36 @@ public final class AsanaClient: Sendable {
         _ = try await perform(request)
     }
 
+    /// Mueve la tarea a la sección de resueltas y, si el proyecto tiene campo de estado, lo pone en
+    /// «solucionada». El estado va después del movimiento para que las reglas de Asana que reaccionan
+    /// a él (completar, pasar a Histórico) actúen sobre la tarea ya movida.
+    public func resolve(_ incident: Incident, toSection sectionGid: String, statusField: StatusField?) async throws {
+        try await move(incident, toSection: sectionGid)
+        guard let statusField else { return }
+        let solved: String?
+        if let known = statusField.solvedOptionGid {
+            solved = known
+        } else {
+            solved = try await solvedOption(ofField: statusField.fieldGid)
+        }
+        guard let solved else { return }
+        try await updateTask(incident, fields: ["custom_fields": [statusField.fieldGid: solved]])
+    }
+
+    /// Opción «solucionada» de un campo enum, buscada por nombre entre las habilitadas.
+    func solvedOption(ofField fieldGid: String) async throws -> String? {
+        let request = try makeRequest(
+            method: "GET",
+            path: "custom_fields/\(fieldGid)",
+            query: [URLQueryItem(name: "opt_fields", value: "enum_options.gid,enum_options.name,enum_options.enabled")]
+        )
+        let data = try await perform(request)
+        let field = try decode(DataEnvelope<CustomFieldDefinitionDTO>.self, from: data).data
+        return field.enumOptions?
+            .first { $0.enabled != false && AsanaConfigurator.contains($0.name ?? "", anyOf: AsanaConfigurator.solvedHints) }?
+            .gid
+    }
+
     /// Fija (o quita, con `nil`) la fecha de vencimiento «YYYY-MM-DD».
     public func setDueDate(_ incident: Incident, dueOn: String?) async throws {
         try await updateTask(incident, fields: ["due_on": dueOn ?? NSNull()])
