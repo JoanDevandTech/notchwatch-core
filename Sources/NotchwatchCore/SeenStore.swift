@@ -11,16 +11,20 @@ public struct SeenStore: Codable, Sendable {
     /// Identificadores de colección cuya línea base ya se tomó (sus incidencias antiguas se dieron por vistas
     /// la primera vez que respondió). Lo gestiona `IncidentMonitor`; ausente en JSON = vacío.
     public var baselinedCollections: Set<String>
+    /// Último responsable visto de cada incidencia abierta, para detectar reasignaciones. Lo gestiona
+    /// `IncidentMonitor`; ausente en JSON = vacío.
+    public var assignees: [String: Assignee]
 
     public init() {
         self.seen = []
         self.snoozedUntil = [:]
         self.initialized = false
         self.baselinedCollections = []
+        self.assignees = [:]
     }
 
     private enum CodingKeys: String, CodingKey {
-        case seen, snoozedUntil, initialized, baselinedCollections
+        case seen, snoozedUntil, initialized, baselinedCollections, assignees
     }
 
     /// Decodificación tolerante: los campos ausentes toman su valor por defecto.
@@ -30,6 +34,7 @@ public struct SeenStore: Codable, Sendable {
         self.snoozedUntil = try container.decodeIfPresent([String: Date].self, forKey: .snoozedUntil) ?? [:]
         self.initialized = try container.decodeIfPresent(Bool.self, forKey: .initialized) ?? false
         self.baselinedCollections = try container.decodeIfPresent(Set<String>.self, forKey: .baselinedCollections) ?? []
+        self.assignees = try container.decodeIfPresent([String: Assignee].self, forKey: .assignees) ?? [:]
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -38,6 +43,7 @@ public struct SeenStore: Codable, Sendable {
         try container.encode(snoozedUntil, forKey: .snoozedUntil)
         try container.encode(initialized, forKey: .initialized)
         try container.encode(baselinedCollections, forKey: .baselinedCollections)
+        try container.encode(assignees, forKey: .assignees)
     }
 }
 

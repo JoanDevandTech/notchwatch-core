@@ -294,6 +294,13 @@ final class BehaviorSettingsTests: XCTestCase {
         XCTAssertNil(BehaviorSettings.default.preferredScreenID)
     }
 
+    func testScopeDefaultsToMineEvenForLegacyProfiles() throws {
+        XCTAssertEqual(BehaviorSettings.default.scope, .mine)
+        XCTAssertEqual(try decode(BehaviorSettings.self, #"{"pollInterval":30,"showOnlyMine":false}"#).scope, .mine)
+        XCTAssertEqual(try decode(BehaviorSettings.self, #"{"scope":"all"}"#).scope, .all)
+        XCTAssertEqual(try decode(NotchwatchProfile.self, #"{"behavior":{"pollInterval":30}}"#).behavior.scope, .mine)
+    }
+
     func testPollIntervalHasAFloorOfTenSeconds() throws {
         XCTAssertEqual(try decode(BehaviorSettings.self, #"{"pollInterval":3}"#).pollInterval, 10)
         XCTAssertEqual(try decode(BehaviorSettings.self, #"{"pollInterval":45}"#).pollInterval, 45)
@@ -314,7 +321,7 @@ final class BehaviorSettingsTests: XCTestCase {
             alertDuration: 12,
             systemNotifications: false,
             hotKey: .off,
-            showOnlyMine: true,
+            scope: .all,
             preferredScreenID: "screen-2"
         )
         let data = try JSONEncoder().encode(behavior)
@@ -352,7 +359,7 @@ final class NotchwatchProfileTests: XCTestCase {
                 priorityColors: AppearanceSettings.defaultPriorityColors.merging([.urgente: "#FF0000"]) { _, custom in custom }
             ),
             sound: SoundSettings(muted: true, doNotDisturb: DoNotDisturb(manual: .until(isoDate("2026-10-14T13:00:00Z")))),
-            behavior: BehaviorSettings(pollInterval: 30, showOnlyMine: true)
+            behavior: BehaviorSettings(pollInterval: 30, scope: .all)
         )
 
         let data = try ProfileCodec.encode(profile)

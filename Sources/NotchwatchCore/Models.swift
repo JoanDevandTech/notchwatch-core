@@ -84,16 +84,46 @@ public struct Incident: Codable, Hashable, Identifiable, Sendable {
         self.permalinkURL = permalinkURL
     }
 
-    /// true si está asignada al usuario indicado. Si se conocen los dos identificadores deciden ellos
-    /// (dos personas pueden llamarse igual); si no, se comparan los nombres sin distinguir mayúsculas.
+    public var assignee: Assignee {
+        Assignee(id: assigneeID, name: assigneeName)
+    }
+
+    /// true si está asignada al usuario indicado (ver `Assignee.matches`).
     public func isAssigned(toUserID userID: String?, name userName: String?) -> Bool {
-        if let assignee = Text.nonEmpty(assigneeID), let user = Text.nonEmpty(userID) {
+        assignee.matches(userID: userID, name: userName)
+    }
+
+    public func isAssigned(to user: SourceIdentity) -> Bool {
+        assignee.matches(userID: user.userID, name: user.name)
+    }
+}
+
+// MARK: - Responsable
+
+/// Responsable de una incidencia tal como lo da la fuente; sin datos, sin asignar.
+public struct Assignee: Codable, Hashable, Sendable {
+    public var id: String?
+    public var name: String?
+
+    public init(id: String? = nil, name: String? = nil) {
+        self.id = id
+        self.name = name
+    }
+
+    /// Si se conocen los dos identificadores deciden ellos (dos personas pueden llamarse igual);
+    /// si no, se comparan los nombres sin distinguir mayúsculas.
+    public func matches(userID: String?, name userName: String?) -> Bool {
+        if let assignee = Text.nonEmpty(id), let user = Text.nonEmpty(userID) {
             return assignee == user
         }
-        if let assignee = Text.nonEmpty(assigneeName), let user = Text.nonEmpty(userName) {
+        if let assignee = Text.nonEmpty(name), let user = Text.nonEmpty(userName) {
             return assignee.lowercased() == user.lowercased()
         }
         return false
+    }
+
+    public func matches(_ user: SourceIdentity) -> Bool {
+        matches(userID: user.userID, name: user.name)
     }
 }
 
