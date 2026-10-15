@@ -11,6 +11,9 @@ import Foundation
 ///   que falla en el primer arranque, o que se reactiva en Ajustes, no inunda de avisos al volver.
 /// - Si una colección falla, se usa su última lista conocida; si no la hay, no se borra el estado
 ///   (vistas/pospuestas) de sus incidencias.
+/// - Alcance (`updateScope`): con `.mine` solo se emiten como nuevas las asignadas al usuario; las de
+///   otros no cuentan como avisadas, y una incidencia que pasa a ser suya se avisa como nueva aunque
+///   estuviera vista o pospuesta. `pending` trae siempre todas.
 public actor IncidentMonitor {
     /// Antigüedad a partir de la cual una incidencia ya existente no se avisa al tomar la línea base.
     public static let freshWindow: TimeInterval = 600
@@ -31,6 +34,10 @@ public actor IncidentMonitor {
     private var notified: Set<String> = []
     /// Última lista correcta por colección, para no perder estado si una colección falla.
     private var lastKnown: [String: [Incident]] = [:]
+    private var scope: IncidentScope = .all
+    private var user: SourceIdentity?
+    /// Incidencias que el usuario se ha asignado desde la app: no se avisan como reasignadas.
+    private var claimed: Set<String> = []
 
     public init(
         sources: [any IncidentSource],
@@ -86,6 +93,7 @@ public actor IncidentMonitor {
         // Una colección desactivada pierde su línea base: si se reactiva, se toma otra.
         store.baselinedCollections.formIntersection(enabledNow)
 
+        trackAssignees(of: current)
         let previous = store
         let diff = IncidentDiffer.diff(
             current: current,
@@ -103,10 +111,12 @@ public actor IncidentMonitor {
             }
         } else {
             notified.formIntersection(openIDs)
+            claimed.formIntersection(openIDs)
+            store.assignees = store.assignees.filter { openIDs.contains($0.key) }
         }
 
-        // Solo se emiten como nuevas las que no se han avisado ya en esta sesión.
-        let fresh = diff.newIncidents.filter { !notified.contains($0.id) }
+        // Solo se emiten como nuevas las del alcance que no se han avisado ya en esta sesión.
+        let fresh = diff.newIncidents.filter { !notified.contains($0.id) && isInScope($0) }
         notified.formUnion(fresh.map { $0.id })
 
         persist()
@@ -125,6 +135,17 @@ public actor IncidentMonitor {
         store.snoozedUntil[id] = clock().addingTimeInterval(duration)
         notified.remove(id)
         persist()
+    }
+
+    /// Fija de qué incidencias se avisa. Con `.mine` y sin usuario conocido no se avisa de ninguna.
+    public func updateScope(_ scope: IncidentScope, for user: SourceIdentity?) async {
+        self.scope = scope
+        self.user = user
+    }
+
+    /// La incidencia pasa a ser del usuario por una acción suya: no se avisará como reasignada.
+    public func claim(_ id: String) async {
+        claimed.insert(id)
     }
 
     /// Sustituye las fuentes conservando vistas, pospuestas y avisos emitidos. La caché de una
@@ -195,6 +216,32 @@ public actor IncidentMonitor {
             store.seen.insert(incident.id)
         }
         store.baselinedCollections.insert(collectionID)
+    }
+
+    private func isInScope(_ incident: Incident) -> Bool {
+        switch scope {
+        case .all:
+            return true
+        case .mine:
+            guard let user else { return false }
+            return incident.isAssigned(to: user)
+        }
+    }
+
+    /// Anota el responsable de cada incidencia. Con `.mine`, la que antes era de otro (o de nadie) y
+    /// ahora es del usuario deja de estar vista, pospuesta y avisada: el diff la trata como nueva.
+    private func trackAssignees(of incidents: [Incident]) {
+        var observed: [String: Assignee] = [:]
+        for incident in incidents where observed[incident.id] == nil {
+            observed[incident.id] = incident.assignee
+            guard scope == .mine, let user, incident.isAssigned(to: user) else { continue }
+            if claimed.remove(incident.id) != nil { continue }
+            guard let before = store.assignees[incident.id], !before.matches(user) else { continue }
+            store.seen.remove(incident.id)
+            store.snoozedUntil[incident.id] = nil
+            notified.remove(incident.id)
+        }
+        store.assignees.merge(observed) { _, current in current }
     }
 
     /// Guarda el estado en disco (JSON atómico). Un fallo de escritura no interrumpe el poll.

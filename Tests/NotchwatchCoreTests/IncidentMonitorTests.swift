@@ -360,6 +360,7 @@ final class IncidentMonitorTests: XCTestCase {
         XCTAssertEqual(store.seen, ["a"])
         XCTAssertEqual(store.snoozedUntil["b"], isoDate("2026-10-14T08:35:00Z"))
         XCTAssertTrue(store.baselinedCollections.isEmpty)
+        XCTAssertTrue(store.assignees.isEmpty)
     }
 
     func testStoreEncodesBaselinedCollectionsKey() throws {
@@ -487,5 +488,198 @@ final class IncidentMonitorMultiSourceTests: XCTestCase {
         guard case .network = outcome.errors["t/x"] else {
             return XCTFail("Error inesperado: \(String(describing: outcome.errors["t/x"]))")
         }
+    }
+}
+
+// MARK: - Alcance «Solo las mías»
+
+final class IncidentMonitorScopeTests: XCTestCase {
+    private let clock = TestClock(isoDate("2026-10-14T10:00:00Z"))
+    private let collection = WatchedCollection(id: "a/uno", name: "Uno")
+    private let joan = SourceIdentity(userID: "u-joan", name: "Joan")
+    private let ana = SourceIdentity(userID: "u-ana", name: "Ana")
+
+    private func incident(_ id: String, assignee: SourceIdentity? = nil, age: TimeInterval = 60) -> Incident {
+        Incident(
+            id: id,
+            collectionID: collection.id,
+            collectionName: collection.name,
+            name: id,
+            createdAt: clock.now.addingTimeInterval(-age),
+            assigneeID: assignee?.userID,
+            assigneeName: assignee?.name
+        )
+    }
+
+    private func makeMonitor(source: FakeSource, storeURL: URL) -> IncidentMonitor {
+        let clock = clock
+        return IncidentMonitor(sources: [source], storeURL: storeURL, now: { clock.now })
+    }
+
+    func testMineScopeOnlyAnnouncesIncidentsAssignedToUserButKeepsAllPending() async throws {
+        let tempDir = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let source = FakeSource(id: "a", collections: [collection], incidents: [collection.id: [
+            incident("mia", assignee: ana),
+            incident("de-joan", assignee: joan),
+            incident("sin-asignar"),
+        ]])
+        let monitor = makeMonitor(source: source, storeURL: tempDir.appendingPathComponent("s.json"))
+        await monitor.updateScope(.mine, for: ana)
+
+        let outcome = await monitor.poll()
+
+        XCTAssertEqual(outcome.newIncidents.map(\.id), ["mia"])
+        XCTAssertEqual(Set(outcome.pending.map(\.id)), ["mia", "de-joan", "sin-asignar"])
+    }
+
+    func testIncidentReassignedToUserIsAnnouncedAsNew() async throws {
+        let tempDir = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        // «antigua» se da por vista en la línea base; «reciente» queda pendiente sin avisar (es de Joan).
+        let source = FakeSource(id: "a", collections: [collection], incidents: [collection.id: [
+            incident("antigua", assignee: joan, age: 3600),
+            incident("reciente", assignee: joan),
+        ]])
+        let monitor = makeMonitor(source: source, storeURL: tempDir.appendingPathComponent("s.json"))
+        await monitor.updateScope(.mine, for: ana)
+
+        let first = await monitor.poll()
+        XCTAssertTrue(first.newIncidents.isEmpty)
+        XCTAssertEqual(first.pending.map(\.id), ["reciente"])
+
+        source.setIncidents([
+            incident("antigua", assignee: ana, age: 3600),
+            incident("reciente", assignee: ana),
+        ], for: collection.id)
+        let second = await monitor.poll()
+
+        XCTAssertEqual(Set(second.newIncidents.map(\.id)), ["antigua", "reciente"])
+        XCTAssertEqual(Set(second.pending.map(\.id)), ["antigua", "reciente"])
+
+        let third = await monitor.poll()
+        XCTAssertTrue(third.newIncidents.isEmpty)
+    }
+
+    func testReassignmentOverridesSeenAndSnoozed() async throws {
+        let tempDir = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let source = FakeSource(id: "a", collections: [collection], incidents: [collection.id: [
+            incident("vista", assignee: joan),
+            incident("pospuesta", assignee: joan),
+        ]])
+        let monitor = makeMonitor(source: source, storeURL: tempDir.appendingPathComponent("s.json"))
+        await monitor.updateScope(.mine, for: ana)
+        _ = await monitor.poll()
+        await monitor.markSeen("vista")
+        await monitor.snooze("pospuesta", for: 3600)
+
+        source.setIncidents([
+            incident("vista", assignee: ana),
+            incident("pospuesta", assignee: ana),
+        ], for: collection.id)
+        let outcome = await monitor.poll()
+
+        XCTAssertEqual(Set(outcome.newIncidents.map(\.id)), ["vista", "pospuesta"])
+    }
+
+    func testReassignmentIsDetectedAfterRestart() async throws {
+        let tempDir = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let storeURL = tempDir.appendingPathComponent("s.json")
+        let source = FakeSource(id: "a", collections: [collection], incidents: [collection.id: [
+            incident("antigua", assignee: joan, age: 3600),
+        ]])
+        let before = makeMonitor(source: source, storeURL: storeURL)
+        await before.updateScope(.mine, for: ana)
+        _ = await before.poll()
+        XCTAssertEqual(try loadStore(at: storeURL).assignees["antigua"], Assignee(id: joan.userID, name: joan.name))
+
+        source.setIncidents([incident("antigua", assignee: ana, age: 3600)], for: collection.id)
+        let after = makeMonitor(source: source, storeURL: storeURL)
+        await after.updateScope(.mine, for: ana)
+        let outcome = await after.poll()
+
+        XCTAssertEqual(outcome.newIncidents.map(\.id), ["antigua"])
+    }
+
+    func testIncidentClaimedFromTheAppIsNotAnnouncedAgain() async throws {
+        let tempDir = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let source = FakeSource(id: "a", collections: [collection], incidents: [collection.id: [
+            incident("antigua", age: 3600),
+        ]])
+        let monitor = makeMonitor(source: source, storeURL: tempDir.appendingPathComponent("s.json"))
+        await monitor.updateScope(.mine, for: ana)
+        _ = await monitor.poll()
+
+        await monitor.claim("antigua")
+        source.setIncidents([incident("antigua", assignee: ana, age: 3600)], for: collection.id)
+        let claimed = await monitor.poll()
+        XCTAssertTrue(claimed.newIncidents.isEmpty)
+        XCTAssertTrue(claimed.pending.isEmpty)
+
+        // La reclamación vale una vez: si luego se la quitan y se la devuelven, se avisa.
+        source.setIncidents([incident("antigua", assignee: joan, age: 3600)], for: collection.id)
+        _ = await monitor.poll()
+        source.setIncidents([incident("antigua", assignee: ana, age: 3600)], for: collection.id)
+        let reassigned = await monitor.poll()
+        XCTAssertEqual(reassigned.newIncidents.map(\.id), ["antigua"])
+    }
+
+    func testMineScopeWithoutKnownUserWaitsForIt() async throws {
+        let tempDir = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let source = FakeSource(id: "a", collections: [collection], incidents: [collection.id: [
+            incident("mia", assignee: ana),
+        ]])
+        let monitor = makeMonitor(source: source, storeURL: tempDir.appendingPathComponent("s.json"))
+        await monitor.updateScope(.mine, for: nil)
+
+        let unknown = await monitor.poll()
+        XCTAssertTrue(unknown.newIncidents.isEmpty)
+        XCTAssertEqual(unknown.pending.map(\.id), ["mia"])
+
+        await monitor.updateScope(.mine, for: ana)
+        let known = await monitor.poll()
+        XCTAssertEqual(known.newIncidents.map(\.id), ["mia"])
+    }
+
+    func testAllScopeAnnouncesEverythingAndIgnoresReassignments() async throws {
+        let tempDir = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let source = FakeSource(id: "a", collections: [collection], incidents: [collection.id: [
+            incident("antigua", assignee: joan, age: 3600),
+            incident("de-joan", assignee: joan),
+        ]])
+        let monitor = makeMonitor(source: source, storeURL: tempDir.appendingPathComponent("s.json"))
+        await monitor.updateScope(.all, for: ana)
+
+        let first = await monitor.poll()
+        XCTAssertEqual(first.newIncidents.map(\.id), ["de-joan"])
+
+        source.setIncidents([
+            incident("antigua", assignee: ana, age: 3600),
+            incident("de-joan", assignee: ana),
+        ], for: collection.id)
+        let second = await monitor.poll()
+        XCTAssertTrue(second.newIncidents.isEmpty)
+        XCTAssertEqual(second.pending.map(\.id), ["de-joan"])
+    }
+
+    func testClosedIncidentsDropTheirRecordedAssignee() async throws {
+        let tempDir = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let storeURL = tempDir.appendingPathComponent("s.json")
+        let source = FakeSource(id: "a", collections: [collection], incidents: [collection.id: [
+            incident("abierta", assignee: joan),
+        ]])
+        let monitor = makeMonitor(source: source, storeURL: storeURL)
+        _ = await monitor.poll()
+        XCTAssertEqual(Set(try loadStore(at: storeURL).assignees.keys), ["abierta"])
+
+        source.setIncidents([], for: collection.id)
+        _ = await monitor.poll()
+        XCTAssertTrue(try loadStore(at: storeURL).assignees.isEmpty)
     }
 }

@@ -25,6 +25,12 @@ public enum HotKeyChoice: String, Codable, CaseIterable, Sendable {
     public static let `default`: HotKeyChoice = .controlOptionCommandI
 }
 
+/// Incidencias de las que avisa la isla. Con `.mine` el contador, la píldora y los avisos solo
+/// cuentan las asignadas al usuario del token, y el panel abre filtrado a «Mías».
+public enum IncidentScope: String, Codable, CaseIterable, Sendable {
+    case mine, all
+}
+
 /// Comportamiento: lectura, movimiento, avisos y atajos.
 public struct BehaviorSettings: Codable, Equatable, Sendable {
     /// Segundos entre lecturas de las fuentes.
@@ -35,7 +41,8 @@ public struct BehaviorSettings: Codable, Equatable, Sendable {
     public var alertDuration: TimeInterval
     public var systemNotifications: Bool
     public var hotKey: HotKeyChoice
-    public var showOnlyMine: Bool
+    /// Ausente en perfiles antiguos: `.mine`.
+    public var scope: IncidentScope
     /// Pantalla elegida; nil = la que tenga notch o la principal.
     public var preferredScreenID: String?
 
@@ -46,7 +53,7 @@ public struct BehaviorSettings: Codable, Equatable, Sendable {
         alertDuration: TimeInterval = 8,
         systemNotifications: Bool = true,
         hotKey: HotKeyChoice = .default,
-        showOnlyMine: Bool = false,
+        scope: IncidentScope = .mine,
         preferredScreenID: String? = nil
     ) {
         self.pollInterval = pollInterval
@@ -55,14 +62,14 @@ public struct BehaviorSettings: Codable, Equatable, Sendable {
         self.alertDuration = alertDuration
         self.systemNotifications = systemNotifications
         self.hotKey = hotKey
-        self.showOnlyMine = showOnlyMine
+        self.scope = scope
         self.preferredScreenID = preferredScreenID
     }
 
     public static let `default` = BehaviorSettings()
 
     private enum CodingKeys: String, CodingKey {
-        case pollInterval, motion, expandOnHover, alertDuration, systemNotifications, hotKey, showOnlyMine, preferredScreenID
+        case pollInterval, motion, expandOnHover, alertDuration, systemNotifications, hotKey, scope, preferredScreenID
     }
 
     public init(from decoder: Decoder) throws {
@@ -73,7 +80,7 @@ public struct BehaviorSettings: Codable, Equatable, Sendable {
         alertDuration = try container.decodeIfPresent(TimeInterval.self, forKey: .alertDuration) ?? 8
         systemNotifications = try container.decodeIfPresent(Bool.self, forKey: .systemNotifications) ?? true
         hotKey = try container.decodeIfPresent(HotKeyChoice.self, forKey: .hotKey) ?? .default
-        showOnlyMine = try container.decodeIfPresent(Bool.self, forKey: .showOnlyMine) ?? false
+        scope = try container.decodeIfPresent(IncidentScope.self, forKey: .scope) ?? .mine
         preferredScreenID = try container.decodeIfPresent(String.self, forKey: .preferredScreenID)
     }
 }
