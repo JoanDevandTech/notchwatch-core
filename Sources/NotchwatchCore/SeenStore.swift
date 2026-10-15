@@ -2,25 +2,25 @@ import Foundation
 
 /// Estado persistente: incidencias ya vistas y pospuestas (JSON en Application Support).
 public struct SeenStore: Codable, Sendable {
-    /// GIDs marcados como vistos por el usuario (o dados por vistos al tomar la línea base).
+    /// Identificadores de incidencia marcados como vistos por el usuario (o dados por vistos al tomar la línea base).
     public var seen: Set<String>
-    /// GID -> fecha hasta la que está pospuesta.
+    /// Identificador de incidencia -> fecha hasta la que está pospuesta.
     public var snoozedUntil: [String: Date]
     /// false hasta la primera ejecución del diff.
     public var initialized: Bool
-    /// Claves de proyecto cuya línea base ya se tomó (sus incidencias antiguas se dieron por vistas
+    /// Identificadores de colección cuya línea base ya se tomó (sus incidencias antiguas se dieron por vistas
     /// la primera vez que respondió). Lo gestiona `IncidentMonitor`; ausente en JSON = vacío.
-    public var baselinedProjects: Set<String>
+    public var baselinedCollections: Set<String>
 
     public init() {
         self.seen = []
         self.snoozedUntil = [:]
         self.initialized = false
-        self.baselinedProjects = []
+        self.baselinedCollections = []
     }
 
     private enum CodingKeys: String, CodingKey {
-        case seen, snoozedUntil, initialized, baselinedProjects
+        case seen, snoozedUntil, initialized, baselinedCollections
     }
 
     /// Decodificación tolerante: los campos ausentes toman su valor por defecto.
@@ -29,7 +29,7 @@ public struct SeenStore: Codable, Sendable {
         self.seen = try container.decodeIfPresent(Set<String>.self, forKey: .seen) ?? []
         self.snoozedUntil = try container.decodeIfPresent([String: Date].self, forKey: .snoozedUntil) ?? [:]
         self.initialized = try container.decodeIfPresent(Bool.self, forKey: .initialized) ?? false
-        self.baselinedProjects = try container.decodeIfPresent(Set<String>.self, forKey: .baselinedProjects) ?? []
+        self.baselinedCollections = try container.decodeIfPresent(Set<String>.self, forKey: .baselinedCollections) ?? []
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -37,7 +37,7 @@ public struct SeenStore: Codable, Sendable {
         try container.encode(seen, forKey: .seen)
         try container.encode(snoozedUntil, forKey: .snoozedUntil)
         try container.encode(initialized, forKey: .initialized)
-        try container.encode(baselinedProjects, forKey: .baselinedProjects)
+        try container.encode(baselinedCollections, forKey: .baselinedCollections)
     }
 }
 

@@ -20,7 +20,7 @@ public struct URLSessionTransport: HTTPTransport, @unchecked Sendable {
     public func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {
-            throw AsanaError.http(0, "Respuesta no HTTP")
+            throw SourceError.network("Respuesta no HTTP")
         }
         return (data, http)
     }

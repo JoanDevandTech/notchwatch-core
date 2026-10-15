@@ -1,0 +1,11 @@
+{
+  "data": [
+    { "gid": "1216898612014391", "resource_type": "project", "name": "Ventas Incidencias", "archived": false },
+    { "gid": "1217141285197084", "resource_type": "project", "name": "Finanzas", "archived": false }
+  ],
+  "next_page": {
+    "offset": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.cHJveWVjdG9z",
+    "path": "/projects?workspace=1199999999999999&archived=false&limit=100&offset=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.cHJveWVjdG9z",
+    "uri": "https://app.asana.com/api/1.0/projects?workspace=1199999999999999&archived=false&limit=100&offset=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.cHJveWVjdG9z"
+  }
+}

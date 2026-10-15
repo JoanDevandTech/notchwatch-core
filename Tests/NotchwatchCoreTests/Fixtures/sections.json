@@ -1,0 +1,8 @@
+{
+  "data": [
+    { "gid": "1216898612014392", "resource_type": "section", "name": "Features" },
+    { "gid": "1219500158564901", "resource_type": "section", "name": "Incidencias Detectadas" },
+    { "gid": "1219499888926675", "resource_type": "section", "name": "Verificación" },
+    { "gid": "1219500158633343", "resource_type": "section", "name": "Solución" }
+  ]
+}
