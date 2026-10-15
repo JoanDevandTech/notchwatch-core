@@ -355,6 +355,60 @@ final class AsanaClientTests: XCTestCase {
         try assertAction(transport.requests.first, method: "PUT", url: taskURL, body: #"{"data":{"assignee":"me"}}"#)
     }
 
+    func testStartProgressAssignsWhenTaskHasNoAssignee() async throws {
+        let transport = MockTransport { request in
+            request.httpMethod == "GET"
+                ? MockResponse(body: Data(#"{"data":{"gid":"1211000000000001","assignee":null}}"#.utf8))
+                : MockResponse()
+        }
+        let client = AsanaClient(token: "tok", transport: transport)
+
+        try await client.startProgress(sample, statusField: AsanaPresets.tbcStatus)
+
+        XCTAssertEqual(transport.requests.count, 2)
+        let lookup = try XCTUnwrap(transport.requests.first)
+        XCTAssertEqual(lookup.httpMethod, "GET")
+        XCTAssertEqual(lookup.url?.path, "/api/1.0/tasks/1211000000000001")
+        XCTAssertEqual(queryValue(lookup, "opt_fields"), "assignee.gid")
+        try assertAction(
+            transport.requests.last,
+            method: "PUT",
+            url: taskURL,
+            body: #"{"data":{"assignee":"me","custom_fields":{"1214163825159804":"1214163825159805"}}}"#
+        )
+    }
+
+    func testStartProgressKeepsExistingAssignee() async throws {
+        let transport = MockTransport { request in
+            request.httpMethod == "GET"
+                ? MockResponse(body: Data(#"{"data":{"gid":"1211000000000001","assignee":{"gid":"1200000000000002"}}}"#.utf8))
+                : MockResponse()
+        }
+        let client = AsanaClient(token: "tok", transport: transport)
+
+        try await client.startProgress(sample, statusField: AsanaPresets.tbcStatus)
+
+        try assertAction(
+            transport.requests.last,
+            method: "PUT",
+            url: taskURL,
+            body: #"{"data":{"custom_fields":{"1214163825159804":"1214163825159805"}}}"#
+        )
+    }
+
+    func testStartProgressDoesNotUpdateWhenLookupFails() async throws {
+        let transport = MockTransport { _ in MockResponse(status: 404, body: Data(#"{"errors":[{"message":"Not found"}]}"#.utf8)) }
+        let client = AsanaClient(token: "tok", transport: transport)
+
+        do {
+            try await client.startProgress(sample, statusField: AsanaPresets.tbcStatus)
+            XCTFail("Debería lanzar .http")
+        } catch let error as SourceError {
+            guard case .http(404, _) = error else { return XCTFail("Error inesperado: \(error)") }
+        }
+        XCTAssertEqual(transport.requests.map(\.httpMethod), ["GET"])
+    }
+
     func testMoveToSection() async throws {
         let transport = MockTransport { _ in MockResponse() }
         let client = AsanaClient(token: "tok", transport: transport)

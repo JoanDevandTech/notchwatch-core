@@ -7,8 +7,8 @@ Núcleo de **Notchwatch**, la isla de incidencias para el notch del Mac. Es un p
 | Módulo | Responsabilidad |
 |---|---|
 | `Models` | `Incident`, `IncidentPriority`, `SourceError`, resultados de diff y poll. |
-| `Sources/IncidentSource` | Protocolo de fuente de incidencias (`IncidentSource`), colecciones vigiladas, estilos, capacidades y acciones. Cualquier app nueva (Jira, GitHub…) se integra implementándolo. |
-| `Sources/Asana` | `AsanaClient` (REST, paginación, 401/429), `AsanaSource`, descubrimiento de workspaces/proyectos/secciones/campos, `AsanaConfigurator` (propone la configuración de un proyecto por los nombres de sus secciones y campos) y el preajuste `AsanaPresets.tubuencamino`. |
+| `Sources/IncidentSource` | Protocolo de fuente de incidencias (`IncidentSource`), colecciones vigiladas, estilos, capacidades y acciones (asignármela, en curso, resolver, vencimiento y prioridad). Cualquier app nueva (Jira, GitHub…) se integra implementándolo. |
+| `Sources/Asana` | `AsanaClient` (REST, paginación, 401/429), `AsanaSource`, descubrimiento de workspaces/proyectos/secciones/campos, `AsanaConfigurator` (propone la configuración de un proyecto por los nombres de sus secciones y campos) y el preajuste `AsanaPresets.tubuencamino`. «En curso» pone el campo de estado del proyecto en su opción «en curso» y asigna la tarea al usuario solo si no tiene responsable. |
 | `IncidentMonitor` | Actor que lee todas las colecciones de todas las fuentes en paralelo, decide qué es nuevo, toma la línea base por colección y persiste vistas y pospuestas (`SeenStore`). |
 | `Settings` | Modelos de ajustes: apariencia (tema, colores por prioridad, tipografía), sonido (motivo por prioridad, volumen, No molestar), comportamiento (lectura, movimiento, atajo) y `NotchwatchProfile`, el perfil completo exportable sin credenciales. |
 | `NotificationPlanner` | Texto de las notificaciones del sistema (una por incidencia o un resumen), con las cadenas inyectadas por la app. |

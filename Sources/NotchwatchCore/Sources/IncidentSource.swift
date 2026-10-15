@@ -51,11 +51,14 @@ public struct SourceCapabilities: OptionSet, Sendable, Hashable {
     public static let resolve = SourceCapabilities(rawValue: 1 << 1)
     public static let dueDate = SourceCapabilities(rawValue: 1 << 2)
     public static let priority = SourceCapabilities(rawValue: 1 << 3)
+    public static let startProgress = SourceCapabilities(rawValue: 1 << 4)
 }
 
 /// Acciones sobre una incidencia que ejecuta la fuente. Abrir el enlace lo hace la app.
 public enum IncidentAction: Equatable, Sendable {
     case assignToMe
+    /// Marca la incidencia «en curso» y, si no tiene responsable, se la asigna al usuario.
+    case startProgress
     /// En Asana: mover a la sección de verificación.
     case resolve
     case setDueDate(String?)
@@ -64,6 +67,7 @@ public enum IncidentAction: Equatable, Sendable {
     public var requiredCapability: SourceCapabilities {
         switch self {
         case .assignToMe: return .assignToMe
+        case .startProgress: return .startProgress
         case .resolve: return .resolve
         case .setDueDate: return .dueDate
         case .setPriority: return .priority

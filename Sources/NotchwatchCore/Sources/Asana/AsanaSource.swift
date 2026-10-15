@@ -16,7 +16,7 @@ public final class AsanaSource: IncidentSource {
     public var displayName: String { config.displayName }
     public var collections: [WatchedCollection] { config.projects.map(\.collection) }
 
-    /// Resolver y prioridad solo se anuncian si TODOS los proyectos activos lo permiten; aun así,
+    /// Resolver, prioridad y «en curso» solo se anuncian si TODOS los proyectos activos lo permiten; aun así,
     /// `perform` lo intenta y falla con `invalidConfiguration` en el proyecto que no puede.
     public var capabilities: SourceCapabilities {
         var capabilities: SourceCapabilities = [.assignToMe, .dueDate]
@@ -26,6 +26,9 @@ public final class AsanaSource: IncidentSource {
         }
         if enabled.allSatisfy({ $0.priorityField != nil }) {
             capabilities.insert(.priority)
+        }
+        if enabled.allSatisfy({ $0.statusField != nil }) {
+            capabilities.insert(.startProgress)
         }
         return capabilities
     }
@@ -44,6 +47,11 @@ public final class AsanaSource: IncidentSource {
         switch action {
         case .assignToMe:
             try await client.assignToMe(incident, statusField: project.statusField)
+        case .startProgress:
+            guard let field = project.statusField else {
+                throw SourceError.invalidConfiguration("El proyecto «\(project.projectName)» no tiene campo de estado")
+            }
+            try await client.startProgress(incident, statusField: field)
         case .resolve:
             guard let section = project.resolvedSectionGid else {
                 throw SourceError.invalidConfiguration("El proyecto «\(project.projectName)» no tiene sección de resueltas")
