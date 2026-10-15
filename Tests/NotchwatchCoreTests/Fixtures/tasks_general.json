@@ -1,0 +1,73 @@
+{
+  "data": [
+    {
+      "gid": "1212000000000001",
+      "resource_type": "task",
+      "name": "Error 500 al generar la factura",
+      "created_at": "2026-10-14T07:00:00.000Z",
+      "due_on": null,
+      "notes": "Errores de consola: 2/2",
+      "permalink_url": "https://app.asana.com/1/1199999999999999/project/1214164017398876/task/1212000000000001",
+      "completed": false,
+      "assignee": null,
+      "custom_fields": [
+        {
+          "gid": "1219502866938804",
+          "resource_type": "custom_field",
+          "name": "Prioridad",
+          "resource_subtype": "enum",
+          "display_value": "Baja",
+          "enum_value": {
+            "gid": "1219502866938805",
+            "resource_type": "enum_option",
+            "name": "Baja",
+            "color": "green",
+            "enabled": true
+          }
+        },
+        {
+          "gid": "1214164017398881",
+          "resource_type": "custom_field",
+          "name": "Prioridad",
+          "resource_subtype": "enum",
+          "display_value": "Alta",
+          "enum_value": {
+            "gid": "1214163825159879",
+            "resource_type": "enum_option",
+            "name": "Alta",
+            "color": "orange",
+            "enabled": true
+          }
+        }
+      ]
+    },
+    {
+      "gid": "1212000000000002",
+      "resource_type": "task",
+      "name": "Caída del panel de operaciones",
+      "created_at": "2026-10-14T06:45:00.000Z",
+      "due_on": null,
+      "notes": "Sin resumen",
+      "permalink_url": "https://app.asana.com/1/1199999999999999/project/1214164017398876/task/1212000000000002",
+      "completed": false,
+      "assignee": null,
+      "custom_fields": [
+        {
+          "gid": "1214164017398881",
+          "resource_type": "custom_field",
+          "name": "Prioridad",
+          "resource_subtype": "enum",
+          "display_value": "Urgente",
+          "enum_value": {
+            "gid": "1214164017398884",
+            "resource_type": "enum_option",
+            "name": "Urgente",
+            "color": "red",
+            "enabled": true
+          }
+        }
+      ]
+    }
+  ],
+  "next_page": null
+}

@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Compilar, testear y empaquetar
+    runs-on: macos-15
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Versiones
+        id: versions
+        run: |
+          xcodebuild -version
+          swift --version
+          echo "swift=$(swift --version 2>&1 | shasum | cut -c1-12)" >> "$GITHUB_OUTPUT"
+
+      - name: Caché de SwiftPM
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: spm-${{ runner.os }}-${{ steps.versions.outputs.swift }}-${{ hashFiles('Package.swift') }}-${{ hashFiles('Sources/**/*.swift', 'Tests/**/*.swift') }}
+          restore-keys: |
+            spm-${{ runner.os }}-${{ steps.versions.outputs.swift }}-${{ hashFiles('Package.swift') }}-
+
+      - name: Compilar
+        run: |
+          set -o pipefail
+          mkdir -p build
+          swift build 2>&1 | tee build/compile.log
+
+      - name: Tests del núcleo
+        run: swift test --parallel
+
+      - name: Empaquetar Notchwatch.app
+        run: |
+          set -o pipefail
+          scripts/bundle.sh 2>&1 | tee build/bundle.log
+
+      - name: Self-test de la app
+        timeout-minutes: 3
+        run: build/Notchwatch.app/Contents/MacOS/Notchwatch --self-test
+
+      - name: Capturas de la isla
+        timeout-minutes: 3
+        run: build/Notchwatch.app/Contents/MacOS/Notchwatch --snapshot build/snapshots
+
+      - name: Comprimir la app
+        run: ditto -c -k --keepParent build/Notchwatch.app build/Notchwatch.zip
+
+      - name: Subir la app
+        uses: actions/upload-artifact@v4
+        with:
+          name: notchwatch-app
+          path: build/Notchwatch.zip
+          retention-days: 14
+
+      - name: Subir capturas
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshots
+          path: build/snapshots
+          retention-days: 14
+
+      # Las capturas también se publican en la rama `ci-snapshots` (un único commit que se
+      # sobrescribe en cada ejecución) para poder revisarlas con git sin descargar artefactos.
+      - name: Publicar capturas en la rama ci-snapshots
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          SOURCE_REF: ${{ github.head_ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          WORK="$(mktemp -d)"
+          cp build/snapshots/*.png "$WORK/"
+          # Avisos del compilador, para revisarlos sin descargar los logs de la CI.
+          cat build/compile.log build/bundle.log 2>/dev/null | grep -E "(warning|error):" | sort -u > "$WORK/compile-warnings.txt" || true
+          cd "$WORK"
+          printf '# Capturas de Notchwatch\n\nGeneradas por la CI desde `%s` (%s).\n' "$SOURCE_REF" "$SOURCE_SHA" > README.md
+          git init -q -b ci-snapshots
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -q -m "ci: capturas de ${SOURCE_SHA:0:7}"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ci-snapshots
