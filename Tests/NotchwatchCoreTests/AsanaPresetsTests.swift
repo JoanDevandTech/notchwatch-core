@@ -1,5 +1,8 @@
 import Foundation
 import XCTest
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 @testable import NotchwatchCore
 
 final class AsanaPresetsTests: XCTestCase {
@@ -46,6 +49,11 @@ final class AsanaPresetsTests: XCTestCase {
             XCTAssertEqual(project.reporterFieldGid, "1216067243827070", project.id)
             XCTAssertEqual(project.moduleFieldGid, "1216067230748421", project.id)
         }
+    }
+
+    func testPresetOffersStartProgressWithAllProjectsEnabled() {
+        let source = AsanaSource(config: AsanaPresets.tubuencamino, token: "tok", transport: MockTransport { _ in MockResponse() })
+        XCTAssertTrue(source.capabilities.contains(.startProgress))
     }
 
     func testSectionGidsAreUnique() throws {

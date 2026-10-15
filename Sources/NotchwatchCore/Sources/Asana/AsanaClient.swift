@@ -67,6 +67,23 @@ public final class AsanaClient: Sendable {
         try await updateTask(incident, fields: fields)
     }
 
+    /// Pone el campo de estado en «en curso» y asigna la tarea al usuario del token solo si,
+    /// según Asana en ese momento, no tiene responsable.
+    public func startProgress(_ incident: Incident, statusField: StatusField) async throws {
+        let request = try makeRequest(
+            method: "GET",
+            path: "tasks/\(incident.id)",
+            query: [URLQueryItem(name: "opt_fields", value: "assignee.gid")]
+        )
+        let data = try await perform(request)
+        let task = try decode(DataEnvelope<TaskAssigneeDTO>.self, from: data).data
+        var fields: [String: Any] = ["custom_fields": [statusField.fieldGid: statusField.inProgressOptionGid]]
+        if Text.nonEmpty(task.assignee?.gid) == nil {
+            fields["assignee"] = "me"
+        }
+        try await updateTask(incident, fields: fields)
+    }
+
     /// Mueve la tarea a la sección indicada.
     public func move(_ incident: Incident, toSection sectionGid: String) async throws {
         let request = try makeRequest(
@@ -401,6 +418,10 @@ struct TaskDTO: Decodable, GIDIdentified {
         case permalinkURL = "permalink_url"
         case customFields = "custom_fields"
     }
+}
+
+struct TaskAssigneeDTO: Decodable {
+    let assignee: AssigneeDTO?
 }
 
 struct AssigneeDTO: Decodable {

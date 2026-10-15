@@ -30,11 +30,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Versiones
-        run: swift --version
+        id: versiones
+        run: |
+          swift --version
+          echo "swift=$(swift --version 2>&1 | shasum | cut -c1-12)" >> "$GITHUB_OUTPUT"
       - name: Caché de SwiftPM
         uses: actions/cache@v6
         with:
           path: .build
-          key: spm-${{ runner.os }}-${{ hashFiles('Package.swift') }}
+          key: spm-${{ runner.os }}-${{ steps.versiones.outputs.swift }}-${{ hashFiles('Package.swift', 'Package.resolved') }}
       - name: Tests
         run: swift test --parallel

@@ -65,7 +65,7 @@ final class AsanaSourceTests: XCTestCase {
 
     func testPresetHasAllCapabilities() {
         let source = presetSource(enabling: ["ventas", "general"], transport: MockTransport { _ in MockResponse() })
-        XCTAssertEqual(source.capabilities, [.assignToMe, .resolve, .dueDate, .priority])
+        XCTAssertEqual(source.capabilities, [.assignToMe, .startProgress, .resolve, .dueDate, .priority])
     }
 
     func testCapabilitiesDropResolveAndPriorityWhenAnEnabledProjectLacksThem() {
@@ -74,12 +74,20 @@ final class AsanaSourceTests: XCTestCase {
         config.projects[1].priorityField = nil
         let source = AsanaSource(config: config, token: "tok", transport: MockTransport { _ in MockResponse() })
 
-        XCTAssertEqual(source.capabilities, [.assignToMe, .dueDate])
+        XCTAssertEqual(source.capabilities, [.assignToMe, .startProgress, .dueDate])
 
         // Si ese proyecto está desactivado, no cuenta.
         config.projects[1].collection.enabled = false
         let narrowed = AsanaSource(config: config, token: "tok", transport: MockTransport { _ in MockResponse() })
-        XCTAssertEqual(narrowed.capabilities, [.assignToMe, .resolve, .dueDate, .priority])
+        XCTAssertEqual(narrowed.capabilities, [.assignToMe, .startProgress, .resolve, .dueDate, .priority])
+    }
+
+    func testCapabilitiesDropStartProgressWhenAnEnabledProjectLacksStatusField() {
+        var config = presetConfig(enabling: ["ventas", "finanzas"])
+        config.projects[1].statusField = nil
+        let source = AsanaSource(config: config, token: "tok", transport: MockTransport { _ in MockResponse() })
+
+        XCTAssertEqual(source.capabilities, [.assignToMe, .resolve, .dueDate, .priority])
     }
 
     // MARK: - Acciones
@@ -97,6 +105,37 @@ final class AsanaSourceTests: XCTestCase {
             bodyString(request),
             #"{"data":{"assignee":"me","custom_fields":{"1214163825159804":"1214163825159805"}}}"#
         )
+    }
+
+    func testStartProgressSetsStatusOfTheProjectAndAssignsWhenUnassigned() async throws {
+        let transport = MockTransport { _ in MockResponse(body: Data(#"{"data":{"gid":"1211000000000001","assignee":null}}"#.utf8)) }
+        let source = presetSource(enabling: ["ventas"], transport: transport)
+
+        try await source.perform(.startProgress, on: incident(in: "ventas"))
+
+        let requests = transport.requests
+        XCTAssertEqual(requests.map(\.httpMethod), ["GET", "PUT"])
+        XCTAssertEqual(queryValue(requests[0], "opt_fields"), "assignee.gid")
+        XCTAssertEqual(requests[1].url?.absoluteString, taskURL)
+        XCTAssertEqual(
+            bodyString(requests[1]),
+            #"{"data":{"assignee":"me","custom_fields":{"1214163825159804":"1214163825159805"}}}"#
+        )
+    }
+
+    func testStartProgressWithoutStatusFieldIsInvalidConfigurationAndSendsNothing() async throws {
+        let transport = MockTransport { _ in MockResponse() }
+        var config = presetConfig(enabling: ["ventas"])
+        config.projects[0].statusField = nil
+        let source = AsanaSource(config: config, token: "tok", transport: transport)
+
+        do {
+            try await source.perform(.startProgress, on: incident(in: "ventas"))
+            XCTFail("Debería lanzar .invalidConfiguration")
+        } catch let error as SourceError {
+            guard case .invalidConfiguration = error else { return XCTFail("Error inesperado: \(error)") }
+        }
+        XCTAssertTrue(transport.requests.isEmpty)
     }
 
     func testResolveMovesToTheResolvedSectionOfTheProject() async throws {

@@ -75,6 +75,7 @@ final class IncidentTests: XCTestCase {
 
     func testIncidentActionRequiredCapabilities() {
         XCTAssertEqual(IncidentAction.assignToMe.requiredCapability, .assignToMe)
+        XCTAssertEqual(IncidentAction.startProgress.requiredCapability, .startProgress)
         XCTAssertEqual(IncidentAction.resolve.requiredCapability, .resolve)
         XCTAssertEqual(IncidentAction.setDueDate("2026-10-20").requiredCapability, .dueDate)
         XCTAssertEqual(IncidentAction.setPriority(.alta).requiredCapability, .priority)
