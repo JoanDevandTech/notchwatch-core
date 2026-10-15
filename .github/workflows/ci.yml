@@ -17,7 +17,7 @@ jobs:
     timeout-minutes: 20
     container: swift:6.0-noble
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Tests
         run: swift test --parallel 2>&1 | tee build.log
       - name: Sin avisos del compilador
@@ -28,7 +28,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Versiones
         run: swift --version
       - name: Caché de SwiftPM
