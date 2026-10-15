@@ -8,6 +8,7 @@ public enum AsanaConfigurator {
     static let priorityHints = ["priori"]
     static let statusHints = ["estado", "status"]
     static let inProgressHints = ["en curso", "in progress", "doing"]
+    static let solvedHints = ["solucion", "resuel", "resolved", "done", "hech"]
     static let reporterHints = ["report"]
     static let moduleHints = ["modulo", "module"]
     static let nameSuffixes = [" incidencias", " incidents"]
@@ -112,7 +113,8 @@ public enum AsanaConfigurator {
             let field = enumField(in: fields, matching: statusHints),
             let option = field.options.first(where: { contains($0.name, anyOf: inProgressHints) })
         else { return nil }
-        return StatusField(fieldGid: field.gid, inProgressOptionGid: option.gid)
+        let solved = field.options.first(where: { contains($0.name, anyOf: solvedHints) })
+        return StatusField(fieldGid: field.gid, inProgressOptionGid: option.gid, solvedOptionGid: solved?.gid)
     }
 
     static func enumField(in fields: [AsanaCustomField], matching hints: [String]) -> AsanaCustomField? {

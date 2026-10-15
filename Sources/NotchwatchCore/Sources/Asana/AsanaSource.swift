@@ -56,7 +56,7 @@ public final class AsanaSource: IncidentSource {
             guard let section = project.resolvedSectionGid else {
                 throw SourceError.invalidConfiguration("El proyecto «\(project.projectName)» no tiene sección de resueltas")
             }
-            try await client.move(incident, toSection: section)
+            try await client.resolve(incident, toSection: section, statusField: project.statusField)
         case .setDueDate(let dueOn):
             try await client.setDueDate(incident, dueOn: dueOn)
         case .setPriority(let priority):

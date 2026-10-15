@@ -435,6 +435,62 @@ final class AsanaClientTests: XCTestCase {
         )
     }
 
+    func testResolveMovesThenSetsSolvedStatus() async throws {
+        let transport = MockTransport { _ in MockResponse() }
+        let client = AsanaClient(token: "tok", transport: transport)
+
+        try await client.resolve(sample, toSection: "1219499888926675", statusField: AsanaPresets.tbcStatus)
+
+        XCTAssertEqual(transport.requests.map(\.httpMethod), ["POST", "PUT"])
+        try assertAction(
+            transport.requests.first,
+            method: "POST",
+            url: "https://app.asana.com/api/1.0/sections/1219499888926675/addTask",
+            body: #"{"data":{"task":"1211000000000001"}}"#
+        )
+        try assertAction(
+            transport.requests.last,
+            method: "PUT",
+            url: taskURL,
+            body: #"{"data":{"custom_fields":{"1214163825159804":"1214163825159829"}}}"#
+        )
+    }
+
+    func testResolveLooksUpSolvedOptionWhenProfileLacksIt() async throws {
+        let transport = MockTransport { request in
+            request.httpMethod == "GET"
+                ? MockResponse(body: Data(#"{"data":{"gid":"1214163825159804","enum_options":[{"gid":"o-curso","name":"En curso","enabled":true},{"gid":"o-sol","name":"Solucionada","enabled":true}]}}"#.utf8))
+                : MockResponse()
+        }
+        let client = AsanaClient(token: "tok", transport: transport)
+        let legacy = StatusField(fieldGid: "1214163825159804", inProgressOptionGid: "o-curso")
+
+        try await client.resolve(sample, toSection: "1219499888926675", statusField: legacy)
+
+        XCTAssertEqual(transport.requests.map(\.httpMethod), ["POST", "GET", "PUT"])
+        XCTAssertEqual(transport.requests[1].url?.path, "/api/1.0/custom_fields/1214163825159804")
+        try assertAction(
+            transport.requests.last,
+            method: "PUT",
+            url: taskURL,
+            body: #"{"data":{"custom_fields":{"1214163825159804":"o-sol"}}}"#
+        )
+    }
+
+    func testResolveOnlyMovesWhenNoSolvedOptionExists() async throws {
+        let transport = MockTransport { request in
+            request.httpMethod == "GET"
+                ? MockResponse(body: Data(#"{"data":{"gid":"f","enum_options":[{"gid":"o-curso","name":"En curso","enabled":true}]}}"#.utf8))
+                : MockResponse()
+        }
+        let client = AsanaClient(token: "tok", transport: transport)
+
+        try await client.resolve(sample, toSection: "s", statusField: StatusField(fieldGid: "f", inProgressOptionGid: "o-curso"))
+        try await client.resolve(sample, toSection: "s", statusField: nil)
+
+        XCTAssertEqual(transport.requests.map(\.httpMethod), ["POST", "GET", "POST"])
+    }
+
     func testSetDueDateWithDate() async throws {
         let transport = MockTransport { _ in MockResponse() }
         let client = AsanaClient(token: "tok", transport: transport)

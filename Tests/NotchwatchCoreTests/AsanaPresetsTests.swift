@@ -45,7 +45,7 @@ final class AsanaPresetsTests: XCTestCase {
             XCTAssertFalse(project.detectedSectionGid.isEmpty, project.id)
             XCTAssertNotNil(project.resolvedSectionGid, project.id)
             XCTAssertNotNil(project.priorityField, project.id)
-            XCTAssertEqual(project.statusField, StatusField(fieldGid: "1214163825159804", inProgressOptionGid: "1214163825159805"), project.id)
+            XCTAssertEqual(project.statusField, StatusField(fieldGid: "1214163825159804", inProgressOptionGid: "1214163825159805", solvedOptionGid: "1214163825159829"), project.id)
             XCTAssertEqual(project.reporterFieldGid, "1216067243827070", project.id)
             XCTAssertEqual(project.moduleFieldGid, "1216067230748421", project.id)
         }

@@ -26,7 +26,11 @@ public enum AsanaPresets {
         ]
     )
 
-    static let tbcStatus = StatusField(fieldGid: "1214163825159804", inProgressOptionGid: "1214163825159805")
+    static let tbcStatus = StatusField(
+        fieldGid: "1214163825159804",
+        inProgressOptionGid: "1214163825159805",
+        solvedOptionGid: "1214163825159829"
+    )
     static let tbcReporterFieldGid = "1216067243827070"
     static let tbcModuleFieldGid = "1216067230748421"
 
