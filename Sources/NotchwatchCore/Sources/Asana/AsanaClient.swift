@@ -56,7 +56,45 @@ public final class AsanaClient: Sendable {
             .map { makeIncident(from: $0, project: project, collection: collection) }
     }
 
+    /// Campos pedidos al listar las tareas asignadas al usuario (con la madre y sus proyectos).
+    static let subtaskOptFields = taskOptFields + ",parent.gid,parent.name,parent.memberships.project.gid"
+
+    /// Subtareas abiertas asignadas al usuario del token en el workspace. Asana no las incluye al
+    /// listar una sección (no son miembros de ningún proyecto), así que se piden aparte.
+    /// Solo devuelve las que tienen tarea madre.
+    func mySubtasks(inWorkspace workspaceGid: String) async throws -> [SubtaskDTO] {
+        let tasks: [SubtaskDTO] = try await fetchAllPages(path: "tasks", query: [
+            URLQueryItem(name: "assignee", value: "me"),
+            URLQueryItem(name: "workspace", value: workspaceGid),
+            URLQueryItem(name: "completed_since", value: "now"),
+            URLQueryItem(name: "opt_fields", value: AsanaClient.subtaskOptFields),
+        ])
+        return tasks.filter { $0.completed != true && Text.nonEmpty($0.parent?.gid) != nil }
+    }
+
+    /// Subtareas de `mine` cuya tarea madre está en el proyecto, como incidencias de `collection`.
+    func subtaskIncidents(_ mine: [SubtaskDTO], project: AsanaProjectConfig, collection: WatchedCollection) -> [Incident] {
+        mine
+            .filter { task in
+                (task.parent?.memberships ?? []).contains { $0.project?.gid == project.projectGid }
+            }
+            .map { task in
+                var incident = makeIncident(from: task.task, project: project, collection: collection)
+                incident.parentID = task.parent?.gid
+                incident.parentName = Text.nonEmpty(task.parent?.name)
+                // Sin campos del proyecto: no hay prioridad ni módulo propios.
+                incident.priority = .ninguna
+                incident.module = incident.parentName.map { "Subtarea de: \($0)" } ?? "Subtarea"
+                return incident
+            }
+    }
+
     // MARK: - Acciones
+
+    /// Marca la tarea como completada (lo que hace «Resolver» con una subtarea).
+    public func complete(_ incident: Incident) async throws {
+        try await updateTask(incident, fields: ["completed": true])
+    }
 
     /// Asigna la tarea al usuario del token y, si se indica, pone el campo de estado en «en curso».
     public func assignToMe(_ incident: Incident, statusField: StatusField?) async throws {
@@ -448,6 +486,34 @@ struct TaskDTO: Decodable, GIDIdentified {
         case permalinkURL = "permalink_url"
         case customFields = "custom_fields"
     }
+}
+
+/// Tarea asignada al usuario con su tarea madre (para las subtareas).
+struct SubtaskDTO: Decodable, GIDIdentified {
+    let task: TaskDTO
+    let parent: ParentDTO?
+
+    var gid: String { task.gid }
+    var completed: Bool? { task.completed }
+
+    enum CodingKeys: String, CodingKey {
+        case parent
+    }
+
+    init(from decoder: Decoder) throws {
+        task = try TaskDTO(from: decoder)
+        parent = try decoder.container(keyedBy: CodingKeys.self).decodeIfPresent(ParentDTO.self, forKey: .parent)
+    }
+}
+
+struct ParentDTO: Decodable {
+    struct Membership: Decodable {
+        let project: NamedDTO?
+    }
+
+    let gid: String?
+    let name: String?
+    let memberships: [Membership]?
 }
 
 struct TaskAssigneeDTO: Decodable {

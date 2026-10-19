@@ -1,0 +1,42 @@
+{
+  "data": [
+    {
+      "gid": "1219609216759515",
+      "name": "Revisar y validar que sea correcto",
+      "created_at": "2026-10-19T07:49:10.516Z",
+      "due_on": null,
+      "notes": "",
+      "permalink_url": "https://app.asana.com/1/1199999999999999/task/1219609216759515",
+      "completed": false,
+      "assignee": { "gid": "1214575082144829", "name": "Filipe" },
+      "custom_fields": [],
+      "parent": {
+        "gid": "1219538322347849",
+        "name": "[#488] cupos anuales visibilidad en cada alojamiento",
+        "memberships": [{ "project": { "gid": "1219499889539646", "name": "Operaciones Incidencias" } }]
+      }
+    },
+    {
+      "gid": "1219609216759999",
+      "name": "Subtarea de otro proyecto",
+      "created_at": "2026-10-19T07:50:00.000Z",
+      "completed": false,
+      "assignee": { "gid": "1214575082144829", "name": "Filipe" },
+      "custom_fields": [],
+      "parent": {
+        "gid": "1219000000000001",
+        "name": "Tarea ajena",
+        "memberships": [{ "project": { "gid": "1199999999999000", "name": "Otro" } }]
+      }
+    },
+    {
+      "gid": "1219609216758888",
+      "name": "Tarea normal asignada",
+      "created_at": "2026-10-19T07:51:00.000Z",
+      "completed": false,
+      "assignee": { "gid": "1214575082144829", "name": "Filipe" },
+      "custom_fields": [],
+      "parent": null
+    }
+  ]
+}

@@ -53,6 +53,13 @@ public struct Incident: Codable, Hashable, Identifiable, Sendable {
     public var assigneeID: String?
     public var assigneeName: String?
     public var permalinkURL: URL?
+    /// Tarea madre si la incidencia es una subtarea (nil en tareas normales). Las subtareas no
+    /// tienen sección ni campos del proyecto: «Resolver» las completa y no admiten prioridad.
+    public var parentID: String?
+    public var parentName: String?
+
+    /// true si es una subtarea asignada (ver `parentID`).
+    public var isSubtask: Bool { parentID != nil }
 
     public init(
         id: String,
@@ -67,7 +74,9 @@ public struct Incident: Codable, Hashable, Identifiable, Sendable {
         dueOn: String? = nil,
         assigneeID: String? = nil,
         assigneeName: String? = nil,
-        permalinkURL: URL? = nil
+        permalinkURL: URL? = nil,
+        parentID: String? = nil,
+        parentName: String? = nil
     ) {
         self.id = id
         self.collectionID = collectionID
@@ -82,6 +91,8 @@ public struct Incident: Codable, Hashable, Identifiable, Sendable {
         self.assigneeID = assigneeID
         self.assigneeName = assigneeName
         self.permalinkURL = permalinkURL
+        self.parentID = parentID
+        self.parentName = parentName
     }
 
     public var assignee: Assignee {
