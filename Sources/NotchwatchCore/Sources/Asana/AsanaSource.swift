@@ -5,10 +5,12 @@ import Foundation
 public final class AsanaSource: IncidentSource {
     public let config: AsanaSourceConfig
     public let client: AsanaClient
+    private let subtasks: SubtaskCache
 
     public init(config: AsanaSourceConfig, token: String, transport: HTTPTransport = URLSessionTransport()) {
         self.config = config
         self.client = AsanaClient(token: token, transport: transport)
+        self.subtasks = SubtaskCache()
     }
 
     public var id: String { config.id }
@@ -39,11 +41,33 @@ public final class AsanaSource: IncidentSource {
 
     public func openIncidents(in collection: WatchedCollection) async throws -> [Incident] {
         let project = try project(forCollectionID: collection.id)
-        return try await client.openIncidents(in: project, collection: collection)
+        let incidents = try await client.openIncidents(in: project, collection: collection)
+        // Subtareas asignadas al usuario cuya madre está en este proyecto (en cualquier sección).
+        // Un fallo aquí no tumba las incidencias del proyecto.
+        let mine: [SubtaskDTO]
+        let workspaceGid = config.workspaceGid
+        do {
+            mine = try await subtasks.value { [client] in
+                try await client.mySubtasks(inWorkspace: workspaceGid)
+            }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            mine = []
+        }
+        let known = Set(incidents.map(\.id))
+        let extra = client.subtaskIncidents(mine, project: project, collection: collection)
+            .filter { !known.contains($0.id) }
+        return incidents + extra
     }
 
     public func perform(_ action: IncidentAction, on incident: Incident) async throws {
         let project = try project(forCollectionID: incident.collectionID)
+        if incident.isSubtask {
+            try await performOnSubtask(action, incident)
+            await subtasks.invalidate()
+            return
+        }
         switch action {
         case .assignToMe:
             try await client.assignToMe(incident, statusField: project.statusField)
@@ -67,11 +91,61 @@ public final class AsanaSource: IncidentSource {
         }
     }
 
+    /// Las subtareas no tienen sección ni campos del proyecto: «Resolver» la completa, «En curso»
+    /// solo la asigna si no tiene responsable y la prioridad no aplica.
+    private func performOnSubtask(_ action: IncidentAction, _ incident: Incident) async throws {
+        switch action {
+        case .assignToMe:
+            try await client.assignToMe(incident, statusField: nil)
+        case .startProgress:
+            if incident.assigneeID == nil {
+                try await client.assignToMe(incident, statusField: nil)
+            }
+        case .resolve:
+            try await client.complete(incident)
+        case .setDueDate(let dueOn):
+            try await client.setDueDate(incident, dueOn: dueOn)
+        case .setPriority:
+            throw SourceError.invalidConfiguration("Las subtareas no tienen prioridad")
+        }
+    }
+
     /// Proyecto configurado para una colección; la fuente no sabe nada de colecciones ajenas.
     public func project(forCollectionID collectionID: String) throws -> AsanaProjectConfig {
         guard let project = config.projects.first(where: { $0.collection.id == collectionID }) else {
             throw SourceError.invalidConfiguration("Colección desconocida: \(collectionID)")
         }
         return project
+    }
+}
+
+/// Comparte entre los proyectos de un mismo sondeo la lista de subtareas asignadas (una petición
+/// en vez de una por proyecto). Caduca a los pocos segundos y tras cualquier acción.
+actor SubtaskCache {
+    private let ttl: TimeInterval
+    private var cached: (at: Date, value: [SubtaskDTO])?
+    private var inFlight: Task<[SubtaskDTO], Error>?
+
+    init(ttl: TimeInterval = 5) {
+        self.ttl = ttl
+    }
+
+    func value(_ fetch: @escaping @Sendable () async throws -> [SubtaskDTO]) async throws -> [SubtaskDTO] {
+        if let cached, Date().timeIntervalSince(cached.at) < ttl {
+            return cached.value
+        }
+        if let inFlight {
+            return try await inFlight.value
+        }
+        let task = Task { try await fetch() }
+        inFlight = task
+        defer { inFlight = nil }
+        let value = try await task.value
+        cached = (Date(), value)
+        return value
+    }
+
+    func invalidate() {
+        cached = nil
     }
 }

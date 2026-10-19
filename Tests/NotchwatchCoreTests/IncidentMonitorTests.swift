@@ -63,7 +63,9 @@ final class IncidentMonitorTests: XCTestCase {
         XCTAssertEqual(first.newIncidents.first?.priority, .urgente)
         XCTAssertEqual(first.newIncidents.first?.collectionID, ventas)
         XCTAssertEqual(first.pending.map(\.id), ["1211000000000001"])
-        XCTAssertEqual(transport.requests.count, 2) // dos páginas de Ventas
+        // Dos páginas de Ventas más la lectura de subtareas asignadas (una por sondeo).
+        XCTAssertEqual(transport.requests.filter { queryValue($0, "section") != nil }.count, 2)
+        XCTAssertEqual(transport.requests.filter { queryValue($0, "assignee") == "me" }.count, 1)
 
         var persisted = try loadStore(at: storeURL)
         XCTAssertTrue(persisted.initialized)

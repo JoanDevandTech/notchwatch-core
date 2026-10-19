@@ -19,7 +19,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Tests
-        run: swift test --parallel 2>&1 | tee build.log
+        shell: bash
+        run: |
+          set -o pipefail
+          swift test --parallel 2>&1 | tee build.log
       - name: Sin avisos del compilador
         run: '! grep -E "warning:" build.log'
 
@@ -40,4 +43,9 @@ jobs:
           path: .build
           key: spm-${{ runner.os }}-${{ steps.versiones.outputs.swift }}-${{ hashFiles('Package.swift', 'Package.resolved') }}
       - name: Tests
-        run: swift test --parallel
+        run: |
+          set -o pipefail
+          swift test --parallel 2>&1 | tee test.log
+      - name: Errores como anotaciones
+        if: failure()
+        run: grep -E "error:|failed|XCTAssert" test.log | head -40 | sed 's/^/::error::/' || true

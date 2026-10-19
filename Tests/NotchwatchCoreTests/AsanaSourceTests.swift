@@ -50,6 +50,108 @@ final class AsanaSourceTests: XCTestCase {
         XCTAssertEqual(queryValue(try XCTUnwrap(transport.requests.first), "section"), "1214164017398877")
     }
 
+    // MARK: - Subtareas asignadas
+
+    private func subtaskTransport() throws -> MockTransport {
+        let mine = try fixture("tasks_mine")
+        let empty = Data(#"{"data":[],"next_page":null}"#.utf8)
+        return MockTransport { request in
+            queryValue(request, "assignee") == "me" ? MockResponse(body: mine) : MockResponse(body: empty)
+        }
+    }
+
+    func testOpenIncidentsAddsMySubtasksWhoseParentIsInTheProject() async throws {
+        let transport = try subtaskTransport()
+        let source = presetSource(enabling: ["operaciones"], transport: transport)
+
+        let incidents = try await source.openIncidents(in: try presetProject("operaciones").collection)
+
+        XCTAssertEqual(incidents.map(\.id), ["1219609216759515"])
+        let subtask = try XCTUnwrap(incidents.first)
+        XCTAssertTrue(subtask.isSubtask)
+        XCTAssertEqual(subtask.parentID, "1219538322347849")
+        XCTAssertEqual(subtask.parentName, "[#488] cupos anuales visibilidad en cada alojamiento")
+        XCTAssertEqual(subtask.assigneeID, "1214575082144829")
+        XCTAssertEqual(subtask.collectionID, tbcCollectionID("operaciones"))
+        XCTAssertEqual(subtask.module, "Subtarea de: [#488] cupos anuales visibilidad en cada alojamiento")
+
+        let mineRequest = try XCTUnwrap(transport.requests.first { queryValue($0, "assignee") == "me" })
+        XCTAssertEqual(queryValue(mineRequest, "workspace"), AsanaPresets.tubuencamino.workspaceGid)
+        XCTAssertEqual(queryValue(mineRequest, "completed_since"), "now")
+        XCTAssertTrue(queryValue(mineRequest, "opt_fields")?.contains("parent.memberships.project.gid") == true)
+    }
+
+    func testSubtasksOfOtherProjectsAreNotListed() async throws {
+        let source = presetSource(enabling: ["ventas"], transport: try subtaskTransport())
+
+        let incidents = try await source.openIncidents(in: try presetProject("ventas").collection)
+
+        XCTAssertTrue(incidents.isEmpty)
+    }
+
+    func testSubtaskFetchIsSharedAcrossProjectsOfOnePoll() async throws {
+        let transport = try subtaskTransport()
+        let source = presetSource(enabling: ["ventas", "operaciones"], transport: transport)
+
+        _ = try await source.openIncidents(in: try presetProject("ventas").collection)
+        _ = try await source.openIncidents(in: try presetProject("operaciones").collection)
+
+        XCTAssertEqual(transport.requests.filter { queryValue($0, "assignee") == "me" }.count, 1)
+    }
+
+    func testSubtaskFetchFailureKeepsTheProjectIncidents() async throws {
+        let general = try fixture("tasks_general")
+        let transport = MockTransport { request in
+            queryValue(request, "assignee") == "me" ? MockResponse(status: 500) : MockResponse(body: general)
+        }
+        let source = presetSource(enabling: ["general"], transport: transport)
+
+        let incidents = try await source.openIncidents(in: try presetProject("general").collection)
+
+        XCTAssertEqual(incidents.map(\.id), ["1212000000000001", "1212000000000002"])
+    }
+
+    func testResolveCompletesASubtaskWithoutMovingIt() async throws {
+        let transport = MockTransport { _ in MockResponse() }
+        let source = presetSource(enabling: ["operaciones"], transport: transport)
+        var subtask = incident(in: "operaciones")
+        subtask.parentID = "1219538322347849"
+
+        try await source.perform(.resolve, on: subtask)
+
+        XCTAssertEqual(transport.requests.count, 1)
+        XCTAssertEqual(transport.requests[0].httpMethod, "PUT")
+        XCTAssertEqual(transport.requests[0].url?.absoluteString, taskURL)
+        XCTAssertEqual(bodyString(transport.requests[0]), #"{"data":{"completed":true}}"#)
+    }
+
+    func testStartProgressOnAssignedSubtaskSendsNothing() async throws {
+        let transport = MockTransport { _ in MockResponse() }
+        let source = presetSource(enabling: ["operaciones"], transport: transport)
+        var subtask = incident(in: "operaciones")
+        subtask.parentID = "1219538322347849"
+        subtask.assigneeID = "1214575082144829"
+
+        try await source.perform(.startProgress, on: subtask)
+
+        XCTAssertTrue(transport.requests.isEmpty)
+    }
+
+    func testSetPriorityOnSubtaskIsInvalidConfiguration() async throws {
+        let transport = MockTransport { _ in MockResponse() }
+        let source = presetSource(enabling: ["operaciones"], transport: transport)
+        var subtask = incident(in: "operaciones")
+        subtask.parentID = "1219538322347849"
+
+        do {
+            try await source.perform(.setPriority(.alta), on: subtask)
+            XCTFail("Debería lanzar .invalidConfiguration")
+        } catch let error as SourceError {
+            guard case .invalidConfiguration = error else { return XCTFail("Error inesperado: \(error)") }
+        }
+        XCTAssertTrue(transport.requests.isEmpty)
+    }
+
     func testOpenIncidentsOfUnknownCollectionIsInvalidConfiguration() async throws {
         let source = presetSource(enabling: ["ventas"], transport: MockTransport { _ in MockResponse() })
 
